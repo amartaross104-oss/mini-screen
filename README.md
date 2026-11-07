@@ -2,7 +2,7 @@
 
 Turn an old (or spare) Android phone into a small companion display for your Windows PC.
 
-- **Music**: now playing from any Windows media player (Apple Music, YouTube Music in a browser, etc.), album art, synced lyrics (LRCLIB) and a live spectrum visualizer.
+- **Music**: now playing from any Windows media player (Apple Music, YouTube Music in a browser, etc.), album art, animated synced lyrics (smooth scroll, the current line grows and its words fill in as they are sung) and a live spectrum visualizer. Lyric timing can be nudged per song with the `-` / `+` buttons; the adjustment is remembered for that song.
 - **Home**: big clock, prayer times (JAKIM method via Aladhan) with the next prayer countdown, PC stats (CPU, RAM, disk, network, temperature).
 - **Control**: volume and mute, launch-app buttons, lock, sleep, show desktop, and a screenshot tool where you crop the shot on the phone before it is saved.
 - **Burn-in care**: dim levels (the DIM button), small periodic pixel shift and a dark screen saver when nothing is playing.
@@ -21,9 +21,11 @@ A small Python server runs on the PC. The phone just opens a web page in its bro
 
 1. Enable **USB debugging** on the phone and plug it in.
 2. Double-click `start.bat`. It creates a virtual environment in `%USERPROFILE%\MiniScreen\venv`, installs the requirements, starts the server, and opens the page on the phone through `adb reverse`.
-3. The dashboard opens straight away. Tap **FULL** in the bottom bar to hide the browser bars.
+3. The dashboard opens straight away. Touch the page once to go fullscreen and lock to landscape (browsers only allow fullscreen after a touch, and drop it whenever the screen turns off).
 
-The page always looks landscape: if the phone is in portrait (for example after the screen turned off and on again) it rotates itself by 90 degrees. Tilt the phone to the left (camera on the left), or press **FLIP** (shown only in portrait) to reverse the direction. After the screen wakes, the page reconnects to the server by itself, so there is nothing to tap or refresh.
+The page always looks landscape: if the phone is in portrait (for example after the screen turned off and on again) it rotates itself by 90 degrees until you touch it. Tilt the phone to the left (camera on the left), or press **FLIP** (shown only in portrait) to reverse the direction. Once fullscreen, Android flips between the two landscape directions by itself.
+
+After the screen wakes, the page replaces its connection to the server by itself, so there is nothing to refresh. The **FULL / REFRESH** button enters fullscreen and refreshes in place (connection, app buttons, lyrics, prayer times) without reloading the page, so fullscreen is kept. The page only does a real reload, once, when a new version of it has been installed on the PC.
 
 By default the server only listens on `127.0.0.1`, so nothing on your network can reach it.
 

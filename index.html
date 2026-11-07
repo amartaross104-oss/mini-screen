@@ -30,7 +30,7 @@ button:active,button.hold{background:var(--c,var(--fg));color:#000}
 #tabs button.on{color:#000;background:var(--cyan);border-color:var(--cyan)}
 
 /* music */
-#s-music{grid-template-columns:34% 1fr;grid-template-rows:1fr 1fr}
+#s-music{grid-template-columns:34% 1fr;grid-template-rows:1.7fr 1fr}   /* lyrics get the bigger share */
 #m-card{grid-row:1/3;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center}
 #art{width:46%;max-width:150px;aspect-ratio:1;background:#111 center/cover;border:2px solid #333;flex:none}
 #m-title{font-size:26px;line-height:1;width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:bold}
@@ -40,9 +40,20 @@ button:active,button.hold{background:var(--c,var(--fg));color:#000}
 #m-ctl{display:flex;gap:8px;margin-top:auto}
 #m-ctl button{font-size:18px;width:52px;height:40px}
 #m-play{--c:var(--yellow)}
-#lyrics{grid-column:2;grid-row:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:2px}
-#lyrics div{font-size:18px;color:var(--dim);max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-#lyrics div.cur{font-size:26px;color:var(--fg);font-weight:bold}
+#lyrics{grid-column:2;grid-row:1;padding:0}
+/* animated lyrics: smooth scroll, the current line grows and lights up, its words fill in as they are sung */
+#ly-wrap{position:absolute;left:14px;right:14px;top:26px;bottom:6px;overflow:hidden;
+  -webkit-mask-image:linear-gradient(transparent 0,#000 16%,#000 80%,transparent 100%);mask-image:linear-gradient(transparent 0,#000 16%,#000 80%,transparent 100%)}
+#ly-list{position:absolute;left:0;right:0;top:0;transition:transform .6s cubic-bezier(.3,.8,.3,1);will-change:transform}
+.ln{width:86%;padding:5px 0;font-size:var(--lyfs,24px);line-height:1.12;font-weight:bold;opacity:.36;transform:scale(.82);transform-origin:left center;
+  transition:transform .5s cubic-bezier(.3,.8,.3,1),opacity .5s}
+.ln.d1{opacity:.55}
+.ln.cur{opacity:1;transform:scale(1.12)}
+.ln .w{background:linear-gradient(90deg,#fff var(--f,100%),rgba(255,255,255,.38) var(--f,100%));-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+.ln.ph{width:100%;text-align:center;font-weight:normal;opacity:.6;transform:none;color:var(--dim)}
+#ly-off{position:absolute;right:104px;top:3px;display:flex;align-items:center;gap:6px;font:700 11px 'Silkscreen',monospace;color:var(--dim)}
+#ly-off button{padding:0 10px;font-size:14px;line-height:1.1;border-width:2px;--c:var(--dim);touch-action:none}
+#ly-v{cursor:pointer;min-width:64px;text-align:center}
 #viz{grid-column:2;grid-row:2;padding:0}
 #viz canvas{width:100%;height:100%;display:block}
 
@@ -104,7 +115,7 @@ button:active,button.hold{background:var(--c,var(--fg));color:#000}
 /* start overlay */
 /* #stage holds everything. When the phone is in portrait it is rotated 90deg so the dashboard still reads as landscape. */
 #stage{position:fixed;left:0;top:0;width:100%;height:100%;overflow:hidden;background:var(--bg)}
-#tabs #fs,#tabs #flip{flex:.35}
+#tabs #rf,#tabs #flip{flex:.8}
 #tabs #flip{display:none}
 </style>
 </head>
@@ -143,7 +154,7 @@ button:active,button.hold{background:var(--c,var(--fg));color:#000}
         <div id="m-bar"></div><div id="m-time">0:00 / 0:00</div>
         <div id="m-ctl"><button data-m="prev">|&lt;</button><button id="m-play" data-m="playpause">||</button><button data-m="next">&gt;|</button></div>
       </div>
-      <div class="panel pk" id="lyrics"><span class="tag">LYRICS</span><span class="tag r" id="ly-st"></span></div>
+      <div class="panel pk" id="lyrics"><span class="tag">LYRICS</span><span class="tag r" id="ly-st"></span><div id="ly-wrap"><div id="ly-list"></div></div><span id="ly-off"><button id="ly-m">-</button><span id="ly-v"></span><button id="ly-p">+</button></span></div>
       <div class="panel cy" id="viz"><canvas></canvas></div>
     </section>
 
@@ -176,7 +187,7 @@ button:active,button.hold{background:var(--c,var(--fg));color:#000}
       </div>
     </section>
   </div>
-  <nav id="tabs"><button data-go="music">MUSIC</button><button data-go="home">HOME</button><button data-go="ctrl">CONTROL</button><button id="dim" style="flex:.45">DIM 100</button><button id="fs">FULL</button><button id="flip">FLIP</button></nav>
+  <nav id="tabs"><button data-go="music">MUSIC</button><button data-go="home">HOME</button><button data-go="ctrl">CONTROL</button><button id="dim" style="flex:.45">DIM 100</button><button id="rf">FULL / REFRESH</button><button id="flip">FLIP</button></nav>
 </div>
 </div>
 
@@ -194,7 +205,7 @@ function go(name) {
   document.querySelectorAll('.screen').forEach(e => e.classList.toggle('on', e.id === 's-' + name));
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.go === name));
   try { localStorage.setItem('tab', name); } catch (e) {}
-  if (name === 'music') sizeCanvas();
+  if (name === 'music') { sizeCanvas(); setLyFont(); lyScroll(lyIdx); }   // the lyrics box had no size while this tab was hidden
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) go(b.dataset.go); });
 let sx = null, sy = null;
@@ -222,57 +233,96 @@ function layoutStage() {
     st.style.transform = dir === 'cw' ? `translateX(${W}px) rotate(90deg)` : `translateY(${H}px) rotate(-90deg)`;
     $('#flip').style.display = 'block';
   }
-  setTimeout(() => { if (typeof sizeCanvas === 'function') sizeCanvas(); }, 60);
+  setTimeout(() => { if (typeof sizeCanvas === 'function') sizeCanvas(); if (typeof lyScroll === 'function') { setLyFont(); lyScroll(lyIdx); } }, 60);
 }
-addEventListener('resize', layoutStage);
-if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', layoutStage);
+// Debounced: while Android is rotating the screen the size changes several times; wait until it settles (less twitchy).
+let layT = null; const layoutSoon = () => { clearTimeout(layT); layT = setTimeout(layoutStage, 300); };
+addEventListener('resize', layoutSoon);
+if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', layoutSoon);
+document.addEventListener('fullscreenchange', layoutSoon);
 $('#flip').onclick = () => { try { localStorage.setItem('rot', rotMode === 'cw' ? 'ccw' : 'cw'); } catch (e) {} layoutStage(); };
 layoutStage();
 
 // ---- fullscreen (optional, one tap) / wake lock (only works on HTTPS or localhost)
 let wl = null;
 async function keepAwake() { try { wl = await navigator.wakeLock.request('screen'); } catch (e) {} }
-$('#fs').onclick = async () => {
-  if (document.fullscreenElement) { try { await document.exitFullscreen(); } catch (e) {} return; }
+// Browsers only allow fullscreen after a touch, and drop it whenever the screen turns off.
+// So: the first touch anywhere on the page goes fullscreen and locks to landscape. 'landscape' (not
+// 'landscape-primary') lets Android flip between the two landscape directions by itself, never to portrait.
+async function goFull() {
+  if (document.fullscreenElement) return;
   try { await document.documentElement.requestFullscreen(); } catch (e) {}
   try { await screen.orientation.lock('landscape'); } catch (e) {}
-};
+}
+// One button for both: enter fullscreen (if not already) and refresh in place, so fullscreen is kept (see softRefresh below).
+$('#rf').onclick = () => { goFull(); softRefresh(); };
+addEventListener('pointerup', goFull, true);
 keepAwake();
 // When the screen turns back on: reconnect right away instead of waiting, and refresh the layout.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
-  keepAwake(); layoutStage(); connect();
+  keepAwake(); layoutStage();
+  // Coming back from sleep: if the socket has been silent, don't wait for the timer; replace it now.
+  if (ws && Date.now() - lastMsg > 3000) dropAndReconnect(); else connect();
 });
-addEventListener('pageshow', () => { layoutStage(); connect(); });
+addEventListener('pageshow', () => { layoutStage(); if (ws && Date.now() - lastMsg > 3000) dropAndReconnect(); else connect(); });
 
 // ---- websocket
 let ws, media = null, mediaAt = 0, spec = new Array(32).fill(0), lyrics = null, lyKey = '';
-let reT = null, lastMsg = Date.now();
+let reT = null, lastMsg = Date.now(), connAt = 0;
 function connect() {
   clearTimeout(reT);
   if (ws && ws.readyState <= 1) return;   // already connected or connecting
+  connAt = Date.now(); lastMsg = Date.now();   // a fresh socket gets a grace period before it is judged dead
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?t=' + encodeURIComponent(TOKEN));
   ws.onmessage = ev => {
     lastMsg = Date.now();
+    if ($('#conn').textContent) setConn('');   // data is flowing again, so clear any leftover error
     const m = JSON.parse(ev.data);
     if (m.spec) spec = m.spec;
-    if ('media' in m) { media = m.media; mediaAt = performance.now(); onMedia(); }
+    if ('media' in m) {
+      const old = media, was = pos();                 // where our running clock thinks the song is
+      media = m.media; mediaAt = performance.now();
+      if (old && media && old.key === media.key && old.playing && media.playing) {
+        const err = media.position - was;             // server number vs our clock (it wobbles by up to ~1 s)
+        if (Math.abs(err) < 1.5) media.position = was + err * 0.35;   // ease small corrections; real seeks still jump
+      }
+      onMedia();
+    }
     if (m.stats) onStats(m.stats);
     if (m.vol) onVol(m.vol);
   };
   ws.onopen = () => setConn('');
-  ws.onclose = async () => {
-    // Tell the user why: wrong token, blocked IP, server unreachable, or just the WebSocket.
-    let why = 'SERVER TAK DICAPAI';
-    try {
-      const r = await fetch('/api/config', {headers: {'X-Token': TOKEN}});
-      why = r.status === 403 ? (TOKEN ? 'DITOLAK: TOKEN/IP SALAH' : 'TIADA TOKEN') : r.ok ? 'WS TERPUTUS' : 'RALAT ' + r.status;
-    } catch (e) {}
-    setConn(why); reT = setTimeout(connect, 1500);
+  ws.onclose = () => {
+    reT = setTimeout(connect, 1500);   // retry first: the diagnosis below must never delay reconnecting
+    diagnose();
   };
 }
-// A socket that went half-dead while the phone slept never closes by itself: no data for 5s means reconnect.
-setInterval(() => { if (ws && ws.readyState === 1 && Date.now() - lastMsg > 5000) ws.close(); }, 2000);
+// Tell the user why it dropped: wrong token, blocked IP, server unreachable, or just the WebSocket.
+async function diagnose() {
+  let why = 'SERVER TAK DICAPAI';
+  try {
+    const r = await fetch('/api/config', {headers: {'X-Token': TOKEN}, signal: AbortSignal.timeout(4000)});
+    why = r.status === 403 ? (TOKEN ? 'DITOLAK: TOKEN/IP SALAH' : 'TIADA TOKEN') : r.ok ? 'WS TERPUTUS' : 'RALAT ' + r.status;
+  } catch (e) {}
+  // The check can finish after a newer socket has already connected: don't show a stale error then.
+  if (ws && ws.readyState === 1) return;
+  setConn(why);
+}
+// A socket that died while the phone slept never closes by itself, and calling close() on it leaves it stuck in
+// CLOSING (no onclose, so no retry). So: detach it, forget it, and open a brand new one right away.
+function dropAndReconnect() {
+  const old = ws;
+  if (old) { old.onopen = old.onmessage = old.onclose = old.onerror = null; try { old.close(); } catch (e) {} }
+  ws = null;
+  diagnose();
+  reT = setTimeout(connect, 300);
+}
+setInterval(() => {
+  if (!ws) return;
+  const st = ws.readyState, quiet = Date.now() - lastMsg;
+  if ((st === 1 && quiet > 5000) || (st === 2 && quiet > 3000) || (st === 0 && Date.now() - connAt > 8000)) dropAndReconnect();
+}, 2000);
 function setConn(t) { const c = $('#conn'); c.textContent = t; c.style.display = t ? 'block' : 'none'; }
 connect();
 
@@ -284,10 +334,11 @@ function onMedia() {
   $('#m-artist').textContent = m ? (m.artist || '-') : '-';
   $('#m-app').textContent = m ? (m.app || '').replace(/\.exe$/i, '').split(/[!.]/)[0].slice(0, 14).toUpperCase() : '-';
   $('#m-play').textContent = m && m.playing ? '||' : '▶';
-  const k = m && m.has_art ? m.key : '';
-  if (k !== curArt) { curArt = k; $('#art').style.backgroundImage = k ? `url('/art?t=${encodeURIComponent(TOKEN)}&k=${encodeURIComponent(k)}')` : 'none'; }
+  // art_v goes up when the server replaces a stale thumbnail with the real one, so the phone fetches it again.
+  const k = m && m.has_art ? m.key + '#' + (m.art_v || 0) : '';
+  if (k !== curArt) { curArt = k; $('#art').style.backgroundImage = k ? `url('/art?t=${encodeURIComponent(TOKEN)}&k=${encodeURIComponent(m.key)}&v=${m.art_v || 0}')` : 'none'; }
   const lk = m ? m.artist + '|' + m.title : '';
-  if (lk !== lyKey) { lyKey = lk; lyrics = null; $('#ly-st').textContent = ''; if (m && m.title) loadLyrics(m, lk); renderLyrics(0); }
+  if (lk !== lyKey) { lyKey = lk; loadOff(); lyrics = null; $('#ly-st').textContent = ''; if (m && m.title) loadLyrics(m, lk); renderLyrics(0); }
 }
 async function loadLyrics(m, lk) {
   $('#ly-st').textContent = 'LOADING';
@@ -295,23 +346,108 @@ async function loadLyrics(m, lk) {
     const r = await api('/api/lyrics?' + new URLSearchParams({title: m.title, artist: m.artist, duration: m.duration}));
     if (lk !== lyKey) return;
     lyrics = r.lines; $('#ly-st').textContent = lyrics ? 'SYNCED' : 'NONE';
+    renderLyrics();
   } catch (e) { $('#ly-st').textContent = 'ERR'; }
 }
 function pos() { if (!media) return 0; return Math.min(media.duration || 1e9, media.position + (media.playing ? (performance.now() - mediaAt) / 1000 : 0)); }
-function renderLyrics(p) {
-  const box = $('#lyrics'); box.querySelectorAll('div').forEach(d => d.remove());
-  const add = (t, c) => { const d = document.createElement('div'); d.textContent = t; if (c) d.className = c; box.appendChild(d); };
-  if (!lyrics) { add(media ? '(tiada lirik tersegerak)' : '(tiada lagu dimainkan)'); return; }
-  let i = lyrics.findIndex(l => l[0] > p) - 1; if (i < -1 || (i === -2)) i = lyrics.length - 1; if (i < 0) i = -1;
-  [i - 1, i, i + 1, i + 2].forEach((j, n) => add(lyrics[j] ? lyrics[j][1] || '♪' : '', n === 1 ? 'cur' : ''));
+// ---- animated lyrics (Apple Music / YouTube Music style)
+// LRCLIB only has a time per LINE, so each word's time is estimated from its share of the line's characters.
+let lyEls = [], lyIdx = -2, lyLastFrame = 0;
+const clamp01 = v => Math.max(0, Math.min(1, v));
+function renderLyrics() {                      // (re)build the line elements for the current song
+  setLyFont();
+  const list = $('#ly-list'); list.innerHTML = ''; lyEls = []; lyIdx = -2;
+  list.style.transition = 'none'; list.style.transform = 'translateY(0)';
+  const wrapH = $('#ly-wrap').clientHeight;
+  if (!lyrics || !lyrics.length) {
+    const d = document.createElement('div'); d.className = 'ln ph';
+    d.textContent = media ? '(tiada lirik tersegerak)' : '(tiada lagu dimainkan)';
+    list.appendChild(d); list.style.transform = `translateY(${Math.max(0, wrapH / 2 - 14)}px)`;
+    setTimeout(() => { list.style.transition = ''; }, 50); return;
+  }
+  lyrics.forEach(([t, text]) => {
+    const el = document.createElement('div'); el.className = 'ln';
+    const words = (text || '♪').split(/\s+/).filter(Boolean);
+    const total = words.reduce((a, w) => a + w.length, 0) || 1; let acc = 0; const ws = [];
+    words.forEach((w, k) => {
+      const s = document.createElement('span'); s.className = 'w'; s.textContent = w; el.appendChild(s);
+      if (k < words.length - 1) el.appendChild(document.createTextNode(' '));
+      ws.push({el: s, a: acc / total, b: (acc + w.length) / total, f: 100}); acc += w.length;
+    });
+    list.appendChild(el); lyEls.push({el, t, ws, len: total});
+  });
+  lyScroll(0);
+  setTimeout(() => { list.style.transition = ''; }, 50);
 }
+// Text size follows the box height, so the lyrics fill the box instead of leaving it half empty.
+function setLyFont() {
+  const h = $('#ly-wrap').clientHeight;
+  if (h > 40) document.documentElement.style.setProperty('--lyfs', Math.round(Math.max(18, Math.min(36, h / 6.6))) + 'px');
+}
+function lyScroll(i) {                          // put line i a little above the middle of the box
+  if (!lyEls.length) return;
+  const L = lyEls[Math.max(0, Math.min(i, lyEls.length - 1))], wrapH = $('#ly-wrap').clientHeight;
+  $('#ly-list').style.transform = `translateY(${Math.round(wrapH * 0.34 - (L.el.offsetTop + L.el.offsetHeight / 2))}px)`;
+}
+function lySet(i) {                             // the current line changed
+  lyIdx = i;
+  lyEls.forEach((L, k) => {
+    L.el.classList.toggle('cur', k === i);
+    L.el.classList.toggle('d1', Math.abs(k - i) === 1);
+    const f = k === i ? 0 : 100;                // current line starts unsung, every other line is fully "lit" (dimmed by opacity)
+    L.ws.forEach(w => { if (w.f !== f) { w.f = f; w.el.style.setProperty('--f', f + '%'); } });
+  });
+  lyScroll(i);
+}
+function lyFrame(now) {
+  requestAnimationFrame(lyFrame);
+  if (now - lyLastFrame < 33 || !lyEls.length) return;     // ~30 fps is plenty and kinder to the phone's battery
+  lyLastFrame = now;
+  const lp = pos() + lyOff;
+  let i = lyIdx;
+  if (i < 0 || i >= lyEls.length || lp < lyEls[i].t || (lyEls[i + 1] && lp >= lyEls[i + 1].t)) {   // moved to another line (or a seek)
+    i = -1; for (let k = 0; k < lyEls.length; k++) { if (lyEls[k].t <= lp) i = k; else break; }
+  }
+  if (i !== lyIdx) lySet(i);
+  if (i < 0) return;
+  const L = lyEls[i], next = lyEls[i + 1] ? lyEls[i + 1].t : L.t + 6;
+  const dur = Math.max(0.6, Math.min(next - L.t - 0.05, L.len * 0.09 + 0.5));   // singing time: not longer than the gap, not absurdly long
+  const p = clamp01((lp - L.t) / dur);
+  L.ws.forEach(w => {
+    const f = Math.round(clamp01((p - w.a) / Math.max(1e-6, w.b - w.a)) * 100);
+    if (f !== w.f) { w.f = f; w.el.style.setProperty('--f', f + '%'); }
+  });
+}
+requestAnimationFrame(lyFrame);
 let lastLy = -2;
+// Lyric timing offset (seconds), remembered PER SONG: different recordings/versions need different values.
+// Positive = show lines earlier. Songs you never adjusted use LY_BASE. A "*" means this song has its own value.
+const LY_BASE = 0.3;
+let lyOffs = {}; try { lyOffs = JSON.parse(localStorage.getItem('lyoffs') || '{}'); } catch (e) {}
+let lyOff = LY_BASE;
+const saveOffs = () => { try { localStorage.setItem('lyoffs', JSON.stringify(lyOffs)); } catch (e) {} };
+function showOff() { $('#ly-v').textContent = (lyOff >= 0 ? '+' : '') + lyOff.toFixed(2) + 's' + (lyKey in lyOffs ? ' *' : ''); }
+function loadOff() { const v = lyOffs[lyKey]; lyOff = typeof v === 'number' ? v : LY_BASE; showOff(); lastLy = -2; }   // called when the song changes
+function stepOff(d) {
+  if (!lyKey) return;
+  lyOff = Math.max(-10, Math.min(10, Math.round((lyOff + d) * 100) / 100));
+  lyOffs[lyKey] = lyOff; saveOffs(); showOff(); lastLy = -2;
+}
+// Tap the value to forget this song's adjustment.
+$('#ly-v').onclick = () => { if (lyKey in lyOffs) { delete lyOffs[lyKey]; saveOffs(); loadOff(); toast('Pelarasan dibuang'); } };
+// Hold - / + to keep stepping.
+function holdBtn(btn, d) {
+  let t = null, iv = null;
+  const stop = () => { clearTimeout(t); clearInterval(iv); t = iv = null; };
+  btn.addEventListener('pointerdown', e => { e.preventDefault(); stepOff(d); t = setTimeout(() => { iv = setInterval(() => stepOff(d), 120); }, 450); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => btn.addEventListener(ev, stop));
+}
+holdBtn($('#ly-m'), -0.25); holdBtn($('#ly-p'), 0.25); showOff();
 function tickMedia() {
   const p = pos(), d = media ? media.duration : 0;
   $('#m-time').textContent = fmt(p) + ' / ' + fmt(d);
   const n = 22, f = d ? Math.round(p / d * n) : 0;
   $('#m-bar').textContent = '■'.repeat(f) + '□'.repeat(n - f);
-  if (lyrics) { const i = lyrics.findIndex(l => l[0] > p); if (i !== lastLy) { lastLy = i; renderLyrics(p); } }
 }
 document.querySelectorAll('[data-m]').forEach(b => b.onclick = () => api('/api/media/' + b.dataset.m, {}));
 
@@ -355,7 +491,8 @@ function tickClock() {
   $('#clock-d').textContent = `${DAYS[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}`;
   updatePrayerHighlight(d);
 }
-setInterval(() => { tickClock(); tickMedia(); }, 500);
+setInterval(tickClock, 500);
+setInterval(tickMedia, 100);   // lyrics were checked every 500 ms, which alone added up to half a second of lag
 
 // ---- prayer times (Aladhan, by phone location)
 const PN = [['Fajr', 'SUBUH'], ['Sunrise', 'SYURUK'], ['Dhuhr', 'ZOHOR'], ['Asr', 'ASAR'], ['Maghrib', 'MAGHRIB'], ['Isha', 'ISYAK']];
@@ -559,15 +696,41 @@ $('#cr-full').onclick = () => saveShot(null);
 $('#cr-cancel').onclick = async () => { await api('/api/shot/cancel', {}); closeCrop(); toast('Dibatalkan'); };
 
 const COLORS = ['var(--pink)', 'var(--green)', 'var(--yellow)', 'var(--cyan)', 'var(--orange)', 'var(--purple)'];
-(async () => {
+async function buildApps() {
   cfg = await api('/api/config');
+  const box = $('#c-apps'); box.querySelectorAll('button').forEach(b => b.remove());   // keep the tag, rebuild the buttons
   cfg.apps.forEach((a, i) => {
     const b = document.createElement('button'); b.style.setProperty('--c', COLORS[i % COLORS.length]);
     b.innerHTML = `<span>${a.key}</span>${a.name}`; b.onclick = () => { api('/api/launch', {i}); toast(a.name); };
-    $('#c-apps').appendChild(b);
+    box.appendChild(b);
   });
+}
+(async () => {
+  await buildApps();
   loadPrayer(); setInterval(loadPrayer, 3600000);
 })();
+
+// ---- REFRESH without reloading the page. A real reload throws away fullscreen, so instead we re-do the work in place:
+// new socket, app buttons, lyrics, prayer times, layout. Only if a NEW VERSION of the page has been installed on the PC
+// do we do a real reload (once), because that is the only way to pick up new code.
+const hashStr = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return h; };
+async function fetchHash() { try { return hashStr(await (await fetch('/', {cache: 'no-store'})).text()); } catch (e) { return null; } }
+let pageHash = null; fetchHash().then(h => { pageHash = h; });
+let refreshing = false;
+async function softRefresh() {
+  if (refreshing) return; refreshing = true;
+  try {
+    toast('Menyegarkan...');
+    const h = await fetchHash();
+    if (h !== null && pageHash !== null && h !== pageHash) { toast('Versi baru, memuat semula'); setTimeout(() => location.reload(), 500); return; }
+    try { await buildApps(); } catch (e) {}
+    lyKey = ''; lyrics = null;                    // the next media update re-downloads the lyrics and reloads this song's offset
+    loadPrayer();
+    layoutStage();
+    dropAndReconnect();                           // brand new socket, never a stale one
+    toast('Dimuat semula');
+  } finally { refreshing = false; }
+}
 let startTab = 'music'; try { startTab = localStorage.getItem('tab') || 'music'; } catch (e) {}
 go(startTab);
 renderLyrics(0);

@@ -6,6 +6,7 @@ random per-run token.
 """
 import asyncio
 import ctypes
+import hashlib
 import json
 import os
 import re
@@ -55,6 +56,8 @@ BANDS = 32
 SPECTRUM = np.zeros(BANDS)
 STATE = {"media": None, "stats": {}, "vol": {"level": 0, "muted": False}}
 ART_CACHE = {}      # key -> bytes
+ART_META = {}       # key -> {"hash", "first" (when we first saw the song), "v" (bumped when the image changes)}
+ART_SETTLE_S = 20   # how long after a song starts we keep checking that its album art has really arrived
 LYRICS_CACHE = {}   # key -> list | None
 
 
@@ -196,21 +199,36 @@ async def read_media():
         artist, alb = artist.split("—", 1)
         artist, album = artist.strip(), (album or alb.strip())
     key = f"{artist}|{props.title}|{album}"
-    if key not in ART_CACHE and props.thumbnail is not None:
-        try:
-            stream = await props.thumbnail.open_read_async()
-            reader = DataReader(stream)
-            await reader.load_async(stream.size)
-            data = bytearray(stream.size)
-            reader.read_bytes(data)
-            ART_CACHE[key] = bytes(data)
-            if len(ART_CACHE) > 20:
-                ART_CACHE.pop(next(iter(ART_CACHE)))
-        except Exception as e:
-            print(f"[art] {e!r}", file=sys.stderr)
+    # When a song changes, Windows often updates the title first and the album art a few seconds LATER, so the first
+    # thumbnail we read can still be the previous song's. Keep re-reading it for ART_SETTLE_S seconds after we first
+    # see this song, and replace the cached image (bumping art_v so the phone fetches it again) if it changes.
+    if props.thumbnail is not None:
+        meta = ART_META.get(key)
+        if meta is None or time.time() - meta["first"] < ART_SETTLE_S:
+            try:
+                stream = await props.thumbnail.open_read_async()
+                reader = DataReader(stream)
+                await reader.load_async(stream.size)
+                data = bytearray(stream.size)
+                reader.read_bytes(data)
+                data = bytes(data)
+                h = hashlib.md5(data).hexdigest()
+                if meta is None:
+                    ART_META[key] = {"hash": h, "first": time.time(), "v": 1}
+                    ART_CACHE[key] = data
+                elif meta["hash"] != h:
+                    meta["hash"], meta["v"] = h, meta["v"] + 1
+                    ART_CACHE[key] = data
+                if len(ART_CACHE) > 20:
+                    old = next(iter(ART_CACHE))
+                    ART_CACHE.pop(old, None)
+                    ART_META.pop(old, None)
+            except Exception as e:
+                print(f"[art] {e!r}", file=sys.stderr)
     return {"title": props.title, "artist": artist, "album": album,
             "playing": playing, "position": pos, "duration": duration, "key": key,
-            "has_art": key in ART_CACHE, "app": ses.source_app_user_model_id}
+            "has_art": key in ART_CACHE, "art_v": ART_META.get(key, {}).get("v", 0),
+            "app": ses.source_app_user_model_id}
 
 
 async def media_cmd(cmd):
