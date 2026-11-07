@@ -1,0 +1,19 @@
+{
+  "port": 8765,
+  "host": "127.0.0.1",
+  "allowed_ips": [],
+  "screenshot_dir": "",
+  "apps": [
+    { "key": "D", "name": "Discord",   "target": "discord://" },
+    { "key": "S", "name": "Steam",     "target": "steam://open/main" },
+    { "key": "Y", "name": "YT Music",  "target": "https://music.youtube.com" },
+    { "key": "E", "name": "Edge",      "target": "msedge" },
+    { "key": "F", "name": "Files",     "target": "explorer" },
+    { "key": "T", "name": "Task Mgr",  "target": "taskmgr" }
+  ],
+  "prayer": {
+    "method": 17,
+    "fallback_lat": 3.139,
+    "fallback_lon": 101.6869
+  }
+}

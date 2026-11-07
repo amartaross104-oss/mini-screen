@@ -1,0 +1,9 @@
+# Personal / secret files: never commit these
+.token
+phone_url.txt
+config.json
+
+# Python
+.venv/
+__pycache__/
+*.pyc

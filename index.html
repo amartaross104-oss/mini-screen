@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="ms">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<title>Mini Screen</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=VT323&display=swap">
+<style>
+:root{
+  --bg:#050505; --fg:#f2f2f2; --dim:#8a8a8a;
+  --pink:#ff3fa4; --cyan:#27d6ff; --yellow:#ffd23f; --green:#6dff5a; --orange:#ff7a3d; --red:#ff3b3b; --purple:#b48cff;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none}
+html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'VT323',ui-monospace,monospace;font-size:20px;overflow:hidden}
+#app{height:100%;display:flex;flex-direction:column;padding:8px;gap:8px}
+#screens{flex:1;min-height:0;position:relative}
+.screen{position:absolute;inset:0;display:none;gap:8px}
+.screen.on{display:grid}
+.panel{position:relative;border:3px solid var(--c,var(--cyan));padding:14px 10px 8px;min-height:0;overflow:hidden}
+.tag{position:absolute;top:-1px;left:-1px;background:var(--c,var(--cyan));color:#000;font:700 11px 'Silkscreen',monospace;padding:1px 6px;letter-spacing:1px}
+.tag.r{left:auto;right:-1px}
+.pk{--c:var(--pink)} .cy{--c:var(--cyan)} .yl{--c:var(--yellow)} .gr{--c:var(--green)} .or{--c:var(--orange)} .rd{--c:var(--red)} .pu{--c:var(--purple)}
+button{font:700 14px 'Silkscreen',monospace;background:#000;color:var(--c,var(--fg));border:2px solid var(--c,var(--fg));padding:6px 8px;cursor:pointer}
+button:active,button.hold{background:var(--c,var(--fg));color:#000}
+
+/* tabs */
+#tabs{display:flex;gap:6px}
+#tabs button{flex:1;padding:4px;font-size:12px;border-width:2px;color:var(--dim);border-color:#333}
+#tabs button.on{color:#000;background:var(--cyan);border-color:var(--cyan)}
+
+/* music */
+#s-music{grid-template-columns:34% 1fr;grid-template-rows:1fr 1fr}
+#m-card{grid-row:1/3;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center}
+#art{width:46%;max-width:150px;aspect-ratio:1;background:#111 center/cover;border:2px solid #333;flex:none}
+#m-title{font-size:26px;line-height:1;width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:bold}
+#m-artist{color:var(--dim);font-size:20px;width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#m-bar{font-size:16px;letter-spacing:0;color:var(--fg);white-space:nowrap;overflow:hidden}
+#m-time{font-size:16px;color:var(--dim)}
+#m-ctl{display:flex;gap:8px;margin-top:auto}
+#m-ctl button{font-size:18px;width:52px;height:40px}
+#m-play{--c:var(--yellow)}
+#lyrics{grid-column:2;grid-row:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:2px}
+#lyrics div{font-size:18px;color:var(--dim);max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#lyrics div.cur{font-size:26px;color:var(--fg);font-weight:bold}
+#viz{grid-column:2;grid-row:2;padding:0}
+#viz canvas{width:100%;height:100%;display:block}
+
+/* home */
+#s-home{grid-template-columns:1.2fr 1fr;grid-template-rows:1fr auto}
+#clock{grid-row:1;display:flex;flex-direction:column;justify-content:center;align-items:center}
+#clock-t{font-size:clamp(70px,22vh,150px);line-height:.9;font-weight:bold;letter-spacing:2px}
+#clock-d{font-size:22px;color:var(--dim)}
+#clock-loc{font:700 11px 'Silkscreen',monospace;color:var(--cyan);letter-spacing:1px;margin-top:4px;max-width:100%;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-transform:uppercase}
+#clock-loc:not(:empty)::before{content:'\25CF  '}
+#pray-next{color:var(--yellow);font-size:22px;margin-top:6px}
+#stats{grid-row:1;grid-column:2;display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;align-content:center}
+.stat .l{font-size:16px;color:var(--dim)} .stat .v{font-size:28px;line-height:1}
+.stat .b{height:8px;background:#222;margin-top:2px}.stat .b i{display:block;height:100%;background:var(--c,var(--cyan));width:0}
+#prayer{grid-column:1/3;grid-row:2;display:grid;grid-template-columns:repeat(6,1fr);gap:6px;text-align:center}
+#prayer div{border:2px solid #333;padding:2px;font-size:18px}
+#prayer div b{display:block;font:700 10px 'Silkscreen',monospace;color:var(--dim)}
+#prayer div.nx{border-color:var(--yellow);color:var(--yellow)}
+#prayer div.nx b{color:var(--yellow)}
+
+/* control */
+#s-ctrl{grid-template-columns:1fr 1.5fr;grid-template-rows:1fr 1fr}
+#c-vol{grid-row:1}
+#vol-n{font-size:44px;line-height:1}
+#vol-b{height:14px;background:#222;margin:6px 0;position:relative}#vol-b i{display:block;height:100%;background:var(--pink);width:0}
+#c-vol .row{display:flex;gap:6px}#c-vol .row button{flex:1}
+#c-apps{grid-column:2;grid-row:1;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;align-content:start}
+#c-apps button{display:flex;gap:6px;align-items:center;font-size:13px;text-align:left;padding:5px}
+#c-apps button span{background:var(--c);color:#000;padding:0 5px}
+#c-sys{grid-column:1/3;grid-row:2;display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+#c-sys button{font-size:13px;height:100%;border-width:3px}
+/* screen saver (burn-in protection) */
+#saver{position:fixed;inset:0;background:#000;display:none;z-index:11}
+#saver-t{position:absolute;font:700 72px 'VT323',monospace;color:#3a3a3a;letter-spacing:3px}
+#app{transition:filter .3s}
+#loc-modal{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:flex-start;justify-content:center;z-index:9;padding:14px}
+#loc-box{width:min(720px,100%);border:3px solid var(--cyan);padding:14px 12px;background:#050505}
+#loc-title{font:700 12px 'Silkscreen',monospace;color:var(--cyan);margin-bottom:8px}
+#loc-in{width:100%;font:24px 'VT323',monospace;background:#000;color:var(--fg);border:2px solid var(--fg);padding:8px;outline:none;user-select:text}
+#loc-msg{font-size:18px;color:var(--yellow);min-height:22px;margin:6px 0}
+#loc-list{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;max-height:30vh;overflow:auto}
+#loc-list button{text-align:left;padding:8px;font-size:12px}
+#loc-btns{display:flex;gap:8px}#loc-btns button{flex:1;padding:8px}
+#conn{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);background:var(--red);color:#000;font:700 12px 'Silkscreen',monospace;padding:3px 10px;display:none;z-index:7}
+#toast{position:fixed;left:50%;top:10px;transform:translateX(-50%);background:var(--green);color:#000;font:700 12px 'Silkscreen',monospace;padding:4px 10px;display:none;z-index:9}
+
+/* crop overlay */
+#crop{position:fixed;inset:0;background:#000;display:none;flex-direction:column;align-items:center;gap:6px;padding:6px;z-index:8}
+#cr-area{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center}
+#cr-wrap{position:relative;display:inline-block;overflow:hidden;line-height:0;border:2px solid #333}
+#cr-img{display:block;max-width:100%;max-height:calc(100vh - 70px);touch-action:none;pointer-events:auto}
+#cr-sel{position:absolute;border:2px solid var(--yellow);box-shadow:0 0 0 9999px rgba(0,0,0,.6);display:none;pointer-events:none}
+#cr-sel .hd{position:absolute;width:16px;height:16px;background:var(--yellow);border:2px solid #000;transform:translate(-50%,-50%)}
+#cr-bar{display:flex;gap:8px;width:100%}
+#cr-bar button{flex:1;padding:8px}
+#cr-bar button:disabled{opacity:.3}
+#cr-hint{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:var(--yellow);color:#000;font:700 11px 'Silkscreen',monospace;padding:2px 8px;pointer-events:none}
+
+/* start overlay */
+#start{position:fixed;inset:0;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:10;text-align:center}
+#start button{font-size:18px;padding:14px 20px;--c:var(--cyan)}
+#start small{color:var(--dim);font-size:18px}
+</style>
+</head>
+<body>
+<div id="start"><button id="go">TAP UNTUK MULA</button><small>Skrin penuh · landscape · kekal hidup</small></div>
+<div id="crop">
+  <div id="cr-area"><div id="cr-wrap"><img id="cr-img" alt=""><div id="cr-sel"></div></div></div>
+  <div id="cr-hint">SERET UNTUK PILIH BAHAGIAN</div>
+  <div id="cr-bar">
+    <button class="gr" id="cr-save" disabled>SIMPAN CROP</button>
+    <button class="cy" id="cr-full">SIMPAN PENUH</button>
+    <button class="rd" id="cr-cancel">BATAL</button>
+  </div>
+</div>
+<div id="loc-modal">
+  <div id="loc-box">
+    <div id="loc-title">TUKAR LOKASI</div>
+    <input id="loc-in" type="text" placeholder="Nama bandar, cth: Kuantan" autocomplete="off" autocapitalize="words" enterkeyhint="search">
+    <div id="loc-msg"></div>
+    <div id="loc-list"></div>
+    <div id="loc-btns">
+      <button class="gr" id="loc-go">CARI</button>
+      <button class="yl" id="loc-reset">AUTOMATIK</button>
+      <button class="rd" id="loc-cancel">BATAL</button>
+    </div>
+  </div>
+</div>
+<div id="saver"><div id="saver-t">--:--</div></div>
+<div id="conn"></div>
+<div id="toast"></div>
+<div id="app">
+  <div id="screens">
+    <section class="screen" id="s-music">
+      <div class="panel" id="m-card"><span class="tag">MUSIC</span><span class="tag r" id="m-app">-</span>
+        <div id="art"></div><div id="m-title">Tiada lagu</div><div id="m-artist">-</div>
+        <div id="m-bar"></div><div id="m-time">0:00 / 0:00</div>
+        <div id="m-ctl"><button data-m="prev">|&lt;</button><button id="m-play" data-m="playpause">||</button><button data-m="next">&gt;|</button></div>
+      </div>
+      <div class="panel pk" id="lyrics"><span class="tag">LYRICS</span><span class="tag r" id="ly-st"></span></div>
+      <div class="panel cy" id="viz"><canvas></canvas></div>
+    </section>
+
+    <section class="screen" id="s-home">
+      <div class="panel pk" id="clock"><span class="tag">CLOCK</span><div id="clock-t">--:--</div><div id="clock-d">-</div><div id="clock-loc"></div><div id="pray-next"></div></div>
+      <div class="panel gr" id="stats"><span class="tag">PC STATS</span>
+        <div class="stat" style="--c:var(--cyan)"><div class="l">CPU</div><div class="v" id="st-cpu">-</div><div class="b"><i id="b-cpu"></i></div></div>
+        <div class="stat" style="--c:var(--pink)"><div class="l">RAM</div><div class="v" id="st-ram">-</div><div class="b"><i id="b-ram"></i></div></div>
+        <div class="stat" style="--c:var(--green)"><div class="l">TEMP</div><div class="v" id="st-temp">-</div><div class="b"><i id="b-temp"></i></div></div>
+        <div class="stat" id="t-gpu" style="--c:var(--yellow)"><div class="l">GPU</div><div class="v" id="st-gpu">-</div><div class="b"><i id="b-gpu"></i></div></div>
+        <div class="stat" style="--c:var(--orange)"><div class="l">DISK C:</div><div class="v" id="st-disk">-</div><div class="b"><i id="b-disk"></i></div></div>
+        <div class="stat" style="--c:var(--green)"><div class="l">NET ↓</div><div class="v" id="st-down">-</div></div>
+        <div class="stat" style="--c:var(--purple)"><div class="l">NET ↑</div><div class="v" id="st-up">-</div></div>
+      </div>
+      <div id="prayer"></div>
+    </section>
+
+    <section class="screen" id="s-ctrl">
+      <div class="panel pk" id="c-vol"><span class="tag">VOLUME</span>
+        <div id="vol-n">-</div><div id="vol-b"><i></i></div>
+        <div class="row"><button data-v="-5">-</button><button data-v="5">+</button><button data-v="mute">MUTE</button></div>
+      </div>
+      <div class="panel cy" id="c-apps"><span class="tag">APPS</span></div>
+      <div class="panel or" id="c-sys"><span class="tag">SYSTEM</span>
+        <button class="cy" data-s="shot">SHOT</button>
+        <button class="gr" data-s="desktop">DESKTOP</button>
+        <button class="yl" data-go="home">BIG CLOCK</button>
+        <button class="rd" data-s="lock" data-hold="1">HOLD<br>LOCK</button>
+        <button class="rd" data-s="sleep" data-hold="1">HOLD<br>SLEEP</button>
+      </div>
+    </section>
+  </div>
+  <nav id="tabs"><button data-go="music">MUSIC</button><button data-go="home">HOME</button><button data-go="ctrl">CONTROL</button><button id="dim" style="flex:.45">DIM 100</button></nav>
+</div>
+
+<script>
+let TOKEN = new URLSearchParams(location.search).get('t') || '';
+try { if (TOKEN) localStorage.setItem('t', TOKEN); else TOKEN = localStorage.getItem('t') || ''; } catch (e) {}
+const $ = s => document.querySelector(s);
+const api = (path, body, method) => fetch(path, {method: method || (body ? 'POST' : 'GET'), headers: {'X-Token': TOKEN, 'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined}).then(r => r.json());
+let toastT; const toast = m => { const t = $('#toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(() => t.style.display = 'none', 1800); };
+const fmt = s => { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const speed = b => b > 1048576 ? (b / 1048576).toFixed(1) + ' MB/s' : Math.round(b / 1024) + ' KB/s';
+
+// ---- tabs
+function go(name) {
+  document.querySelectorAll('.screen').forEach(e => e.classList.toggle('on', e.id === 's-' + name));
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.go === name));
+  try { localStorage.setItem('tab', name); } catch (e) {}
+  if (name === 'music') sizeCanvas();
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) go(b.dataset.go); });
+let sx = null;
+document.addEventListener('touchstart', e => sx = e.touches[0].clientX, {passive: true});
+document.addEventListener('touchend', e => {
+  if (sx === null) return; const dx = e.changedTouches[0].clientX - sx; sx = null;
+  if (Math.abs(dx) < 90 || (typeof cropOpen === 'function' && cropOpen())) return;
+  const order = ['music', 'home', 'ctrl']; const cur = order.findIndex(n => $('#s-' + n).classList.contains('on'));
+  go(order[Math.max(0, Math.min(2, cur + (dx < 0 ? 1 : -1)))]);
+});
+
+// ---- start / fullscreen / wake lock
+let wl = null;
+async function keepAwake() { try { wl = await navigator.wakeLock.request('screen'); } catch (e) {} }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake(); });
+$('#go').onclick = async () => {
+  try { await document.documentElement.requestFullscreen(); } catch (e) {}
+  try { await screen.orientation.lock('landscape'); } catch (e) {}
+  keepAwake(); $('#start').style.display = 'none';
+};
+
+// ---- websocket
+let ws, media = null, mediaAt = 0, spec = new Array(32).fill(0), lyrics = null, lyKey = '';
+function connect() {
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?t=' + encodeURIComponent(TOKEN));
+  ws.onmessage = ev => {
+    const m = JSON.parse(ev.data);
+    if (m.spec) spec = m.spec;
+    if ('media' in m) { media = m.media; mediaAt = performance.now(); onMedia(); }
+    if (m.stats) onStats(m.stats);
+    if (m.vol) onVol(m.vol);
+  };
+  ws.onopen = () => setConn('');
+  ws.onclose = async () => {
+    // Tell the user why: wrong token, blocked IP, server unreachable, or just the WebSocket.
+    let why = 'SERVER TAK DICAPAI';
+    try {
+      const r = await fetch('/api/config', {headers: {'X-Token': TOKEN}});
+      why = r.status === 403 ? (TOKEN ? 'DITOLAK: TOKEN/IP SALAH' : 'TIADA TOKEN') : r.ok ? 'WS TERPUTUS' : 'RALAT ' + r.status;
+    } catch (e) {}
+    setConn(why); setTimeout(connect, 1500);
+  };
+}
+function setConn(t) { const c = $('#conn'); c.textContent = t; c.style.display = t ? 'block' : 'none'; }
+connect();
+
+// ---- media
+let curArt = '';
+function onMedia() {
+  const m = media;
+  $('#m-title').textContent = m ? (m.title || 'Tiada tajuk') : 'Tiada lagu';
+  $('#m-artist').textContent = m ? (m.artist || '-') : '-';
+  $('#m-app').textContent = m ? (m.app || '').replace(/\.exe$/i, '').split(/[!.]/)[0].slice(0, 14).toUpperCase() : '-';
+  $('#m-play').textContent = m && m.playing ? '||' : '▶';
+  const k = m && m.has_art ? m.key : '';
+  if (k !== curArt) { curArt = k; $('#art').style.backgroundImage = k ? `url('/art?t=${encodeURIComponent(TOKEN)}&k=${encodeURIComponent(k)}')` : 'none'; }
+  const lk = m ? m.artist + '|' + m.title : '';
+  if (lk !== lyKey) { lyKey = lk; lyrics = null; $('#ly-st').textContent = ''; if (m && m.title) loadLyrics(m, lk); renderLyrics(0); }
+}
+async function loadLyrics(m, lk) {
+  $('#ly-st').textContent = 'LOADING';
+  try {
+    const r = await api('/api/lyrics?' + new URLSearchParams({title: m.title, artist: m.artist, duration: m.duration}));
+    if (lk !== lyKey) return;
+    lyrics = r.lines; $('#ly-st').textContent = lyrics ? 'SYNCED' : 'NONE';
+  } catch (e) { $('#ly-st').textContent = 'ERR'; }
+}
+function pos() { if (!media) return 0; return Math.min(media.duration || 1e9, media.position + (media.playing ? (performance.now() - mediaAt) / 1000 : 0)); }
+function renderLyrics(p) {
+  const box = $('#lyrics'); box.querySelectorAll('div').forEach(d => d.remove());
+  const add = (t, c) => { const d = document.createElement('div'); d.textContent = t; if (c) d.className = c; box.appendChild(d); };
+  if (!lyrics) { add(media ? '(tiada lirik tersegerak)' : '(tiada lagu dimainkan)'); return; }
+  let i = lyrics.findIndex(l => l[0] > p) - 1; if (i < -1 || (i === -2)) i = lyrics.length - 1; if (i < 0) i = -1;
+  [i - 1, i, i + 1, i + 2].forEach((j, n) => add(lyrics[j] ? lyrics[j][1] || '♪' : '', n === 1 ? 'cur' : ''));
+}
+let lastLy = -2;
+function tickMedia() {
+  const p = pos(), d = media ? media.duration : 0;
+  $('#m-time').textContent = fmt(p) + ' / ' + fmt(d);
+  const n = 22, f = d ? Math.round(p / d * n) : 0;
+  $('#m-bar').textContent = '■'.repeat(f) + '□'.repeat(n - f);
+  if (lyrics) { const i = lyrics.findIndex(l => l[0] > p); if (i !== lastLy) { lastLy = i; renderLyrics(p); } }
+}
+document.querySelectorAll('[data-m]').forEach(b => b.onclick = () => api('/api/media/' + b.dataset.m, {}));
+
+// ---- visualizer
+const cv = $('#viz canvas'), cx = cv.getContext('2d');
+function sizeCanvas() { const r = cv.getBoundingClientRect(), d = devicePixelRatio || 1; cv.width = r.width * d; cv.height = r.height * d; }
+addEventListener('resize', sizeCanvas);
+const peaks = new Array(32).fill(0);
+function draw() {
+  const W = cv.width, H = cv.height; cx.clearRect(0, 0, W, H);
+  const n = 32, rows = 14, bw = W / n, bh = H / rows;
+  for (let i = 0; i < n; i++) {
+    const v = (spec[i] || 0) / 100, lit = Math.round(v * rows);
+    peaks[i] = Math.max(lit, peaks[i] - 0.15);
+    for (let r = 0; r < rows; r++) {
+      const on = r < lit; const y = H - (r + 1) * bh;
+      cx.fillStyle = r < rows * .5 ? '#27d6ff' : r < rows * .8 ? '#ffd23f' : '#ff3fa4';
+      cx.globalAlpha = on ? 1 : 0.07; cx.fillRect(i * bw + 1, y + 1, bw - 2, bh - 2);
+    }
+    cx.globalAlpha = 1; cx.fillStyle = '#fff'; cx.fillRect(i * bw + 1, H - (Math.round(peaks[i]) + 1) * bh + 1, bw - 2, 2);
+  }
+  requestAnimationFrame(draw);
+}
+sizeCanvas(); draw();
+
+// ---- stats & clock
+function onStats(s) {
+  const set = (id, v, suf) => $('#st-' + id).textContent = v == null ? 'N/A' : v + suf;
+  set('cpu', s.cpu, '%'); set('ram', s.ram, '%'); set('disk', s.disk, '%'); set('temp', s.temp, '°C');
+  $('#b-temp').style.width = Math.min(100, s.temp || 0) + '%';
+  $('#b-temp').style.background = s.temp >= 75 ? 'var(--red)' : s.temp >= 60 ? 'var(--yellow)' : 'var(--green)';
+  $('#t-gpu').style.display = s.gpu == null ? 'none' : '';  // hide GPU tile when no data (this PC has no NVIDIA GPU)
+  set('gpu', s.gpu, s.gpu_temp ? '% ' + s.gpu_temp + '°' : '%');
+  $('#st-down').textContent = speed(s.down); $('#st-up').textContent = speed(s.up);
+  [['cpu', s.cpu], ['ram', s.ram], ['gpu', s.gpu], ['disk', s.disk]].forEach(([k, v]) => $('#b-' + k).style.width = (v || 0) + '%');
+}
+const DAYS = ['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'], MON = ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogo', 'Sep', 'Okt', 'Nov', 'Dis'];
+function tickClock() {
+  const d = new Date();
+  $('#clock-t').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  $('#clock-d').textContent = `${DAYS[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}`;
+  updatePrayerHighlight(d);
+}
+setInterval(() => { tickClock(); tickMedia(); }, 500);
+
+// ---- prayer times (Aladhan, by phone location)
+const PN = [['Fajr', 'SUBUH'], ['Sunrise', 'SYURUK'], ['Dhuhr', 'ZOHOR'], ['Asr', 'ASAR'], ['Maghrib', 'MAGHRIB'], ['Isha', 'ISYAK']];
+let times = null, cfg = null;
+const savedPlace = () => { try { return JSON.parse(localStorage.getItem('place') || 'null'); } catch (e) { return null; } };
+const dstr = d => `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+// Location source order: chosen city -> phone GPS (needs a secure context) -> PC (Windows location, coarse) -> fixed fallback.
+function getPos(fallback) {
+  const pc = async () => {
+    try { const r = await api('/api/location'); if (r.lat != null) return {lat: r.lat, lon: r.lon, src: r.source === 'config' ? 'tetap' : 'pc'}; } catch (e) {}
+    return null;
+  };
+  const fb = async () => (await pc()) || {lat: fallback.lat, lon: fallback.lon, fb: true, src: 'lalai'};
+  const saved = savedPlace();
+  if (saved) return Promise.resolve({lat: saved.lat, lon: saved.lon, name: saved.name, src: 'pilihan'});  // city chosen on the phone wins
+  return new Promise(res => {
+    if (!window.isSecureContext || !navigator.geolocation) return fb().then(res);
+    navigator.geolocation.getCurrentPosition(p => res({lat: p.coords.latitude, lon: p.coords.longitude, src: 'gps'}),
+      () => fb().then(res), {enableHighAccuracy: true, timeout: 20000, maximumAge: 600000});
+  });
+}
+// Place name from coordinates (BigDataCloud client endpoint, no key). Returns e.g. "Shah Alam, Selangor".
+async function getPlace(p) {
+  try {
+    const j = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${p.lat}&longitude=${p.lon}&localityLanguage=ms`).then(r => r.json());
+    const a = j.locality || j.city, b = j.principalSubdivision;
+    const name = a && b && a !== b ? `${a}, ${b}` : (a || b);
+    if (name) return name;
+  } catch (e) {}
+  return `${p.lat.toFixed(2)}, ${p.lon.toFixed(2)}`;
+}
+function setLoc(name) { $('#clock-loc').textContent = name || ''; }
+async function loadPrayer() {
+  const d = new Date(), key = d.toDateString();
+  let c = null; try { c = JSON.parse(localStorage.getItem('prayer') || 'null'); } catch (e) {}
+  // Drop the cache if it is from another day, or if GPS is now available but the cached place came from the PC.
+  const sp = savedPlace();
+  if (c && (c.key !== key || (sp ? c.src !== 'pilihan' : (window.isSecureContext && c.src !== 'gps')))) c = null;
+  times = c && c.times || null; let loc = c && c.loc || null;
+  if (times) renderPrayer(); setLoc(loc);
+  if (times && loc) return;
+  const p = await getPos({lat: cfg.prayer.fallback_lat, lon: cfg.prayer.fallback_lon});
+  if (!times) {
+    const ds = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+    try {
+      const r = await fetch(`https://api.aladhan.com/v1/timings/${ds}?latitude=${p.lat}&longitude=${p.lon}&method=${cfg.prayer.method}`).then(r => r.json());
+      times = Object.fromEntries(PN.map(([k]) => [k, r.data.timings[k].slice(0, 5)]));
+    } catch (e) { toast('Waktu solat gagal dimuat'); }
+  }
+  if (!loc) loc = (p.name || (p.fb ? 'KUALA LUMPUR' : await getPlace(p))) + ' · ' + p.src.toUpperCase();
+  setLoc(loc); renderPrayer();
+  // Don't cache fallback results, so the next load retries real location.
+  if (times && !p.fb) { try { localStorage.setItem('prayer', JSON.stringify({key, times, loc, src: p.src})); } catch (e) {} }
+  else if (p.fb) toast('Lokasi tak dapat, guna lalai');
+}
+// ---- choose a city by name (saved on the phone; overrides GPS/PC/config until reset)
+const locModal = $('#loc-modal'), locIn = $('#loc-in'), locMsg = $('#loc-msg');
+const refreshPlace = () => { try { localStorage.removeItem('prayer'); } catch (e) {} locModal.style.display = 'none'; times = null; setLoc('...'); loadPrayer(); };
+$('#clock-loc').onclick = () => { locIn.value = ''; locMsg.textContent = 'Contoh: Kuantan, Ipoh, Johor Bahru'; locModal.style.display = 'flex'; setTimeout(() => locIn.focus(), 60); };
+$('#loc-cancel').onclick = () => { locModal.style.display = 'none'; };
+$('#loc-reset').onclick = () => { try { localStorage.removeItem('place'); } catch (e) {} refreshPlace(); toast('Lokasi automatik'); };
+// City search: Open-Meteo geocoding (free, no key). Malaysia first, then worldwide.
+async function geocode(q) {
+  const base = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=en&format=json`;
+  for (const extra of ['&countryCode=MY', '']) {
+    try { const r = await fetch(base + extra).then(r => r.json()); if (r.results && r.results.length) return r.results; } catch (e) {}
+  }
+  return [];
+}
+function pickPlace(r) {
+  const name = [r.name, r.admin1].filter(Boolean).join(', ');
+  try { localStorage.setItem('place', JSON.stringify({lat: r.latitude, lon: r.longitude, name})); } catch (e) {}
+  refreshPlace(); toast(name);
+}
+async function searchPlace() {
+  const q = locIn.value.trim(); if (!q) return;
+  const list = $('#loc-list'); list.innerHTML = ''; locMsg.textContent = 'MENCARI...';
+  const res = await geocode(q);
+  if (!res.length) { locMsg.textContent = 'TAK JUMPA. CUBA NAMA LAIN'; return; }
+  if (res.length === 1) return pickPlace(res[0]);
+  locMsg.textContent = 'PILIH SATU:';
+  res.forEach(r => {
+    const b = document.createElement('button'); b.className = 'cy';
+    b.textContent = [r.name, r.admin1, r.country_code].filter(Boolean).join(', ');
+    b.onclick = () => pickPlace(r); list.appendChild(b);
+  });
+}
+$('#loc-go').onclick = searchPlace;
+locIn.onkeydown = e => { if (e.key === 'Enter') searchPlace(); };
+function renderPrayer() {
+  $('#prayer').innerHTML = times ? PN.map(([k, n]) => `<div data-k="${k}"><b>${n}</b>${times[k]}</div>`).join('') : '';
+  updatePrayerHighlight(new Date());
+}
+function updatePrayerHighlight(d) {
+  if (!times) return;
+  const mins = d.getHours() * 60 + d.getMinutes(); let next = null;
+  for (const [k, n] of PN) { const [h, m] = times[k].split(':').map(Number); if (h * 60 + m > mins) { next = [k, n, h * 60 + m]; break; } }
+  document.querySelectorAll('#prayer div').forEach(e => e.classList.toggle('nx', next && e.dataset.k === next[0]));
+  if (next) { const left = next[2] - mins; $('#pray-next').textContent = `${next[1]} dalam ${Math.floor(left / 60)}j ${left % 60}m`; }
+  else $('#pray-next').textContent = 'Subuh esok';
+}
+
+// ---- controls
+function onVol(v) { $('#vol-n').textContent = v.muted ? 'MUTE' : v.level + '%'; $('#vol-b i').style.width = (v.muted ? 0 : v.level) + '%'; }
+document.querySelectorAll('[data-v]').forEach(b => b.onclick = async () => {
+  const v = b.dataset.v; onVol(await api('/api/volume', v === 'mute' ? {mute: true} : {delta: +v}));
+});
+document.querySelectorAll('[data-s]').forEach(b => {
+  const run = async () => {
+    const r = await api('/api/system/' + b.dataset.s, {});
+    if (b.dataset.s === 'shot' && r.ok) return openCrop();
+    toast(r.ok ? 'OK' : 'Gagal: ' + (r.error || '').slice(0, 40));
+  };
+  if (!b.dataset.hold) { b.onclick = run; return; }
+  let t; const start = () => { b.classList.add('hold'); t = setTimeout(() => { b.classList.remove('hold'); run(); }, 800); };
+  const stop = () => { b.classList.remove('hold'); clearTimeout(t); };
+  b.addEventListener('touchstart', start, {passive: true}); b.addEventListener('touchend', stop); b.addEventListener('touchcancel', stop);
+  b.addEventListener('mousedown', start); b.addEventListener('mouseup', stop); b.addEventListener('mouseleave', stop);
+});
+// ---- screenshot crop
+const crop = $('#crop'), crImg = $('#cr-img'), crSel = $('#cr-sel');
+let sel = null;
+const cropOpen = () => crop.style.display === 'flex';
+function openCrop() {
+  sel = null; drawSel(); $('#cr-hint').textContent = 'SERET UNTUK PILIH BAHAGIAN';
+  crImg.src = '/shot.jpg?t=' + encodeURIComponent(TOKEN) + '&n=' + Date.now();
+  crop.style.display = 'flex';
+}
+function closeCrop() { crop.style.display = 'none'; crImg.removeAttribute('src'); sel = null; drag = null; }
+function drawSel() {
+  $('#cr-save').disabled = !sel;
+  if (!sel) { crSel.style.display = 'none'; return; }
+  Object.assign(crSel.style, {display: 'block', left: sel.x * 100 + '%', top: sel.y * 100 + '%', width: sel.w * 100 + '%', height: sel.h * 100 + '%'});
+}
+const rel = e => { const r = crImg.getBoundingClientRect(); return {x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))}; };
+// Resize handles (visual only; hit-testing below is done in pixels for easy touch).
+['tl:0:0', 't:50:0', 'tr:100:0', 'l:0:50', 'r:100:50', 'bl:0:100', 'b:50:100', 'br:100:100'].forEach(s => {
+  const [, x, y] = s.split(':'); const d = document.createElement('i'); d.className = 'hd';
+  d.style.left = x + '%'; d.style.top = y + '%'; crSel.appendChild(d);
+});
+const MINF = 0.02, TOL = 30, clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+let drag = null;
+function hitTest(e) {
+  if (!sel) return {m: 'new'};
+  const r = crImg.getBoundingClientRect();
+  const L = r.left + sel.x * r.width, T = r.top + sel.y * r.height, R = L + sel.w * r.width, B = T + sel.h * r.height;
+  const x = e.clientX, y = e.clientY;
+  const inX = x > L - TOL && x < R + TOL, inY = y > T - TOL && y < B + TOL;
+  let l = Math.abs(x - L) < TOL && inY, rt = Math.abs(x - R) < TOL && inY;
+  let t = Math.abs(y - T) < TOL && inX, b = Math.abs(y - B) < TOL && inX;
+  if (l && rt) { if (Math.abs(x - L) <= Math.abs(x - R)) rt = false; else l = false; }
+  if (t && b) { if (Math.abs(y - T) <= Math.abs(y - B)) b = false; else t = false; }
+  if (l || rt || t || b) return {m: 'resize', l, r: rt, t, b};
+  if (x > L && x < R && y > T && y < B) return {m: 'move'};
+  return {m: 'new'};
+}
+crImg.addEventListener('pointerdown', e => {
+  crImg.setPointerCapture(e.pointerId);
+  const h = hitTest(e), p = rel(e);
+  drag = {...h, start: p, orig: sel ? {...sel} : null};
+  if (h.m === 'new') { sel = null; drawSel(); }
+});
+crImg.addEventListener('pointermove', e => {
+  if (!drag) return; const p = rel(e), o = drag.orig;
+  if (drag.m === 'new') {
+    const s = drag.start;
+    sel = {x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y)};
+    if (sel.w < 0.01 || sel.h < 0.01) sel = null;
+  } else if (drag.m === 'move') {
+    sel = {x: clamp(o.x + p.x - drag.start.x, 0, 1 - o.w), y: clamp(o.y + p.y - drag.start.y, 0, 1 - o.h), w: o.w, h: o.h};
+  } else {
+    let x0 = o.x, x1 = o.x + o.w, y0 = o.y, y1 = o.y + o.h;
+    if (drag.l) x0 = clamp(p.x, 0, x1 - MINF);
+    if (drag.r) x1 = clamp(p.x, x0 + MINF, 1);
+    if (drag.t) y0 = clamp(p.y, 0, y1 - MINF);
+    if (drag.b) y1 = clamp(p.y, y0 + MINF, 1);
+    sel = {x: x0, y: y0, w: x1 - x0, h: y1 - y0};
+  }
+  drawSel();
+});
+const endDrag = () => { drag = null; if (sel) $('#cr-hint').textContent = 'SERET DALAM = GERAK · TARIK TEPI = UBAH SAIZ'; };
+crImg.addEventListener('pointerup', endDrag);
+crImg.addEventListener('pointercancel', endDrag);
+crImg.addEventListener('dragstart', e => e.preventDefault());
+async function saveShot(rect) {
+  const r = await api('/api/shot/save', rect || {});
+  if (r.ok) { closeCrop(); toast('Disimpan: ' + r.result.split('\\').pop()); } else toast('Gagal: ' + (r.error || '').slice(0, 40));
+}
+$('#cr-save').onclick = () => sel && saveShot(sel);
+$('#cr-full').onclick = () => saveShot(null);
+$('#cr-cancel').onclick = async () => { await api('/api/shot/cancel', {}); closeCrop(); toast('Dibatalkan'); };
+
+const COLORS = ['var(--pink)', 'var(--green)', 'var(--yellow)', 'var(--cyan)', 'var(--orange)', 'var(--purple)'];
+(async () => {
+  cfg = await api('/api/config');
+  cfg.apps.forEach((a, i) => {
+    const b = document.createElement('button'); b.style.setProperty('--c', COLORS[i % COLORS.length]);
+    b.innerHTML = `<span>${a.key}</span>${a.name}`; b.onclick = () => { api('/api/launch', {i}); toast(a.name); };
+    $('#c-apps').appendChild(b);
+  });
+  loadPrayer(); setInterval(loadPrayer, 3600000);
+})();
+let startTab = 'music'; try { startTab = localStorage.getItem('tab') || 'music'; } catch (e) {}
+go(startTab);
+renderLyrics(0);
+
+// ---- burn-in protection: dim levels, pixel shift, and a dark screen saver when idle
+const SAVER_MIN = 5;                       // minutes with no music + no touch before the saver starts
+const DIMS = [1, 0.7, 0.45];
+let dimI = 0; try { dimI = Math.min(DIMS.length - 1, +localStorage.getItem('dim') || 0); } catch (e) {}
+function applyDim() { $('#app').style.filter = `brightness(${DIMS[dimI]})`; $('#dim').textContent = 'DIM ' + Math.round(DIMS[dimI] * 100); }
+$('#dim').onclick = () => { dimI = (dimI + 1) % DIMS.length; try { localStorage.setItem('dim', dimI); } catch (e) {} applyDim(); };
+applyDim();
+
+let lastTouch = Date.now(), saverOn = false;
+['pointerdown', 'touchstart', 'keydown'].forEach(ev => addEventListener(ev, () => { if (!saverOn) lastTouch = Date.now(); }, {passive: true, capture: true}));
+function placeSaver() {
+  const d = new Date(), t = $('#saver-t');
+  t.textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  t.style.left = (8 + Math.random() * 55) + '%'; t.style.top = (8 + Math.random() * 65) + '%';
+}
+function showSaver() { saverOn = true; $('#saver').style.display = 'block'; placeSaver(); }
+function hideSaver() { saverOn = false; lastTouch = Date.now(); $('#saver').style.display = 'none'; }
+// Tapping the saver only wakes the screen; stopPropagation so the tap doesn't press a button underneath.
+$('#saver').addEventListener('click', e => { e.stopPropagation(); hideSaver(); });
+let saverMoved = 0;
+setInterval(() => {
+  const playing = !!(media && media.playing);
+  const busy = cropOpen() || locModal.style.display === 'flex' || $('#start').style.display !== 'none';
+  if (saverOn && playing) hideSaver();
+  else if (!saverOn && !playing && !busy && Date.now() - lastTouch > SAVER_MIN * 60000) showSaver();
+  if (Date.now() - saverMoved > 60000) {            // every minute: move the saver clock and nudge the UI a few px
+    saverMoved = Date.now();
+    if (saverOn) placeSaver();
+    $('#app').style.transform = `translate(${Math.round(Math.random() * 8 - 4)}px, ${Math.round(Math.random() * 8 - 4)}px)`;
+  }
+}, 1000);
+</script>
+</body>
+</html>
