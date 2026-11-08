@@ -2,9 +2,9 @@
 
 Turn an old (or spare) Android phone into a small companion display for your Windows PC.
 
-- **Music**: now playing from any Windows media player (Apple Music, YouTube Music in a browser, etc.), album art, animated synced lyrics (smooth scroll, the current line grows and its words fill in as they are sung) and a live spectrum visualizer. Lyric timing can be nudged per song with the `-` / `+` buttons; the adjustment is remembered for that song.
+- **Music**: now playing from any Windows media player (Apple Music, YouTube Music in a browser, etc.), album art, animated synced lyrics (smooth scroll, the current line grows and its words fill in as they are sung) and a live spectrum visualizer. Lyric timing can be nudged per song with the `-` / `+` buttons; the adjustment is remembered for that song. Volume is on the same screen: tap or drag the volume bar, or use `-` / `+` and mute.
 - **Home**: big clock, prayer times (JAKIM method via Aladhan) with the next prayer countdown, PC stats (CPU, RAM, disk, network, temperature).
-- **Control**: volume and mute, launch-app buttons, lock, sleep, show desktop, and a screenshot tool where you crop the shot on the phone before it is saved.
+- **Control**: launch-app buttons, lock, sleep, show desktop, and a screenshot tool where you crop the shot on the phone before it is saved.
 - **Burn-in care**: dim levels (the DIM button), small periodic pixel shift and a dark screen saver when nothing is playing.
 
 A small Python server runs on the PC. The phone just opens a web page in its browser, so there is nothing to install on the phone.
