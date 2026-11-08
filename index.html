@@ -76,6 +76,36 @@ button:active,button.hold{background:var(--c,var(--fg));color:#000}
 
 /* control */
 #s-ctrl{grid-template-columns:1fr;grid-template-rows:1.1fr 1fr}
+/* up next (Apple Music queue) */
+#s-queue{grid-template-columns:1fr;grid-template-rows:1fr}
+#q-now{position:absolute;left:10px;right:10px;top:28px;height:62px;display:flex;align-items:center;gap:10px;padding:5px 10px;border:2px solid var(--green);background:rgba(109,255,90,.10)}
+#q-art{width:48px;height:48px;flex:none;background:#111 center/cover;border:1px solid #333}
+#q-now .m{flex:1;min-width:0}
+#q-now .lab{display:flex;align-items:center;gap:6px;font:700 10px 'Silkscreen',monospace;color:var(--green);letter-spacing:1px}
+#q-now .t{font-size:22px;font-weight:bold;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#q-now .a{font-size:16px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#q-now .d{font-size:18px;color:var(--fg)}
+#q-bar{height:4px;background:#222;margin-top:3px}#q-bar i{display:block;height:100%;width:0;background:var(--green)}
+.eq{display:inline-flex;align-items:flex-end;gap:2px;height:12px}
+.eq i{display:block;width:3px;height:3px;background:var(--green);animation:eqb .9s ease-in-out infinite}
+.eq i:nth-child(2){animation-delay:.3s}.eq i:nth-child(3){animation-delay:.6s}
+@keyframes eqb{0%,100%{height:3px}50%{height:12px}}
+#q-now.paused .eq i{animation-play-state:paused}
+#q-now.paused{border-color:#444;background:transparent}
+#q-now.paused .lab{color:var(--dim)}
+#q-list{position:absolute;left:10px;right:10px;top:96px;bottom:6px;overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+.qr{display:flex;align-items:center;gap:10px;padding:6px 10px;margin-bottom:6px;border:2px solid #262626;cursor:pointer}
+.qr .n{font:700 12px 'Silkscreen',monospace;color:var(--green);min-width:22px}
+.qr .qa{width:44px;height:44px;flex:none;background:#151515 center/cover;border:1px solid #333}
+.qr .qa.noart{display:flex;align-items:center;justify-content:center}
+.qr .qa.noart::after{content:'\266A';color:#444;font-size:22px}
+.qr .m{flex:1;min-width:0}
+.qr .t{font-size:22px;font-weight:bold;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qr .a{font-size:17px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qr .d{font-size:18px;color:var(--dim)}
+.qr.arm{border-color:var(--yellow)}
+.qr.arm .d{color:var(--yellow);font:700 11px 'Silkscreen',monospace}
+.q-msg{padding:24px 10px;text-align:center;color:var(--dim);font-size:20px}
 /* volume now lives on the music screen, inside the music card */
 #m-vol{display:flex;align-items:center;gap:4px;width:100%;margin-top:4px}
 #m-vol button{font-size:15px;padding:0;height:32px;min-width:32px}
@@ -162,6 +192,16 @@ button:active,button.hold{background:var(--c,var(--fg));color:#000}
       <div class="panel cy" id="viz"><canvas></canvas></div>
     </section>
 
+    <section class="screen" id="s-queue">
+      <div class="panel gr" id="q-panel"><span class="tag">UP NEXT</span><span class="tag r" id="q-st"></span>
+        <div id="q-now"><div id="q-art"></div>
+          <div class="m"><div class="lab"><span class="eq"><i></i><i></i><i></i></span><span id="q-lab">SEKARANG</span></div>
+            <div class="t" id="q-t">-</div><div class="a" id="q-a">-</div><div id="q-bar"><i></i></div></div>
+          <div class="d" id="q-time">0:00</div></div>
+        <div id="q-list"><div class="q-msg">Memuatkan...</div></div>
+      </div>
+    </section>
+
     <section class="screen" id="s-home">
       <div class="panel pk" id="clock"><span class="tag">CLOCK</span><div id="clock-t">--:--</div><div id="clock-d">-</div><div id="clock-loc"></div><div id="pray-next"></div></div>
       <div class="panel gr" id="stats"><span class="tag">PC STATS</span>
@@ -187,7 +227,7 @@ button:active,button.hold{background:var(--c,var(--fg));color:#000}
       </div>
     </section>
   </div>
-  <nav id="tabs"><button data-go="music">MUSIC</button><button data-go="home">HOME</button><button data-go="ctrl">CONTROL</button><button id="dim" style="flex:.45">DIM 100</button><button id="rf">FULL / REFRESH</button><button id="flip">FLIP</button></nav>
+  <nav id="tabs"><button data-go="music">MUSIC</button><button data-go="queue">QUEUE</button><button data-go="home">HOME</button><button data-go="ctrl">CONTROL</button><button id="dim" style="flex:.45">DIM 100</button><button id="rf">FULL / REFRESH</button><button id="flip">FLIP</button></nav>
 </div>
 </div>
 
@@ -216,8 +256,8 @@ document.addEventListener('touchend', e => {
   // "left/right" in the page's own orientation: when rotated, that is the screen's vertical axis.
   const dx = rotMode === 'cw' ? ddy : rotMode === 'ccw' ? -ddy : ddx;
   if (Math.abs(dx) < 90 || (typeof cropOpen === 'function' && cropOpen())) return;
-  const order = ['music', 'home', 'ctrl']; const cur = order.findIndex(n => $('#s-' + n).classList.contains('on'));
-  go(order[Math.max(0, Math.min(2, cur + (dx < 0 ? 1 : -1)))]);
+  const order = ['music', 'queue', 'home', 'ctrl']; const cur = order.findIndex(n => $('#s-' + n).classList.contains('on'));
+  go(order[Math.max(0, Math.min(order.length - 1, cur + (dx < 0 ? 1 : -1)))]);
 });
 
 // ---- layout: always look landscape, even if the phone is stuck in portrait (e.g. after the screen turned off)
@@ -290,6 +330,7 @@ function connect() {
       onMedia();
     }
     if (m.stats) onStats(m.stats);
+    if (m.queue) onQueue(m.queue);
     if (m.vol && Date.now() > volHold) onVol(m.vol);   // don't let the PC's older reading jump the bar while I'm dragging it
   };
   ws.onopen = () => setConn('');
@@ -337,6 +378,12 @@ function onMedia() {
   // art_v goes up when the server replaces a stale thumbnail with the real one, so the phone fetches it again.
   const k = m && m.has_art ? m.key + '#' + (m.art_v || 0) : '';
   if (k !== curArt) { curArt = k; $('#art').style.backgroundImage = k ? `url('/art?t=${encodeURIComponent(TOKEN)}&k=${encodeURIComponent(m.key)}&v=${m.art_v || 0}')` : 'none'; }
+  // the "now playing" strip on the Queue tab (the queue list itself only holds upcoming songs)
+  $('#q-art').style.backgroundImage = $('#art').style.backgroundImage;
+  $('#q-t').textContent = m ? (m.title || 'Tiada tajuk') : 'Tiada lagu dimainkan';
+  $('#q-a').textContent = m ? [m.artist, m.album].filter(Boolean).join(' · ') : '';
+  $('#q-lab').textContent = !m ? 'TIADA LAGU' : m.playing ? 'SEKARANG' : 'JEDA';
+  $('#q-now').classList.toggle('paused', !(m && m.playing));
   const lk = m ? m.artist + '|' + m.title : '';
   if (lk !== lyKey) { lyKey = lk; loadOff(); lyrics = null; $('#ly-st').textContent = ''; if (m && m.title) loadLyrics(m, lk); renderLyrics(0); }
 }
@@ -350,6 +397,12 @@ async function loadLyrics(m, lk) {
   } catch (e) { $('#ly-st').textContent = 'ERR'; }
 }
 function pos() { if (!media) return 0; return Math.min(media.duration || 1e9, media.position + (media.playing ? (performance.now() - mediaAt) / 1000 : 0)); }
+// Rough syllable count: Hangul / kana / Han characters are one syllable each; for Latin text (Malay, English) count vowel groups.
+function syllables(w) {
+  const cjk = (w.match(/[가-힯぀-ヿ一-鿿]/g) || []).length;
+  if (cjk) return cjk;
+  return Math.max(1, (w.toLowerCase().match(/[aeiouy]+/g) || []).length);
+}
 // ---- animated lyrics (Apple Music / YouTube Music style)
 // LRCLIB only has a time per LINE, so each word's time is estimated from its share of the line's characters.
 let lyEls = [], lyIdx = -2, lyLastFrame = 0;
@@ -368,11 +421,11 @@ function renderLyrics() {                      // (re)build the line elements fo
   lyrics.forEach(([t, text]) => {
     const el = document.createElement('div'); el.className = 'ln';
     const words = (text || '♪').split(/\s+/).filter(Boolean);
-    const total = words.reduce((a, w) => a + w.length, 0) || 1; let acc = 0; const ws = [];
+    const sy = words.map(syllables), total = sy.reduce((a, b) => a + b, 0) || 1; let acc = 0; const ws = [];   // a word's share of the line = its share of the syllables
     words.forEach((w, k) => {
       const s = document.createElement('span'); s.className = 'w'; s.textContent = w; el.appendChild(s);
       if (k < words.length - 1) el.appendChild(document.createTextNode(' '));
-      ws.push({el: s, a: acc / total, b: (acc + w.length) / total, f: 100}); acc += w.length;
+      ws.push({el: s, a: acc / total, b: (acc + sy[k]) / total, f: 100}); acc += sy[k];
     });
     list.appendChild(el); lyEls.push({el, t, ws, len: total});
   });
@@ -411,7 +464,7 @@ function lyFrame(now) {
   if (i !== lyIdx) lySet(i);
   if (i < 0) return;
   const L = lyEls[i], next = lyEls[i + 1] ? lyEls[i + 1].t : L.t + 6;
-  const dur = Math.max(0.6, Math.min(next - L.t - 0.05, L.len * 0.09 + 0.5));   // singing time: not longer than the gap, not absurdly long
+  const dur = Math.max(0.6, Math.min(next - L.t - 0.05, L.len * 0.3 + 0.4));   // singing time (L.len = syllables): not longer than the gap, not absurdly long
   const p = clamp01((lp - L.t) / dur);
   L.ws.forEach(w => {
     const f = Math.round(clamp01((p - w.a) / Math.max(1e-6, w.b - w.a)) * 100);
@@ -448,6 +501,10 @@ function tickMedia() {
   $('#m-time').textContent = fmt(p) + ' / ' + fmt(d);
   const n = 22, f = d ? Math.round(p / d * n) : 0;
   $('#m-bar').textContent = '■'.repeat(f) + '□'.repeat(n - f);
+  if ($('#s-queue').classList.contains('on')) {                         // only while the Queue tab is showing
+    $('#q-time').textContent = fmt(p);
+    $('#q-bar i').style.width = d ? Math.min(100, p / d * 100) + '%' : '0';
+  }
 }
 document.querySelectorAll('[data-m]').forEach(b => b.onclick = () => api('/api/media/' + b.dataset.m, {}));
 
@@ -714,6 +771,66 @@ async function saveShot(rect) {
 $('#cr-save').onclick = () => sel && saveShot(sel);
 $('#cr-full').onclick = () => saveShot(null);
 $('#cr-cancel').onclick = async () => { await api('/api/shot/cancel', {}); closeCrop(); toast('Dibatalkan'); };
+
+// ---- up next: the list comes from Apple Music's Queue panel (read by the PC). Tap a song once to mark it,
+// tap it again to jump to it (the PC presses "next" that many times; the songs in between are skipped).
+const Q_MSG = {
+  closed: 'Panel Queue dalam Apple Music tertutup. Buka panel Queue (butang Queue) supaya senarai muncul.',
+  no_app: 'Apple Music tak berjalan.',
+  other_app: 'Senarai ini hanya untuk Apple Music dan YouTube Music (dalam Edge). Pemain semasa ialah yang lain.',
+  ytm_closed: 'Buka halaman Now Playing YouTube Music dan pilih tab UP NEXT (tab YouTube Music mesti yang sedang dipaparkan dalam Edge).',
+  ytm_noaccess: 'Edge tak mendedahkan kandungan halaman. Hidupkan Web accessibility di edge://accessibility, kemudian muat semula tab YouTube Music (F5).',
+  error: 'Tak dapat membaca senarai Apple Music (susun atur aplikasi mungkin berubah).',
+  init: 'Memuatkan...'
+};
+let qItems = [], qArm = null, qArmT = null;
+function setQArt(el, url) {                        // album picture on a queue row (or a note placeholder)
+  const ok = typeof url === 'string' && /^https:\/\//.test(url);
+  el.classList.toggle('noart', !ok);
+  el.style.backgroundImage = ok ? 'url("' + encodeURI(url) + '")' : 'none';
+}
+function onQueue(q) {
+  const items = q.items || [];
+  const list = $('#q-list');
+  // Same songs in the same order and the rows are already drawn (e.g. only album pictures arrived late):
+  // update the pictures in place, so a song you just tapped stays marked.
+  if (q.state === 'ok' && items.length && items.length === qItems.length && list.querySelectorAll('.qr').length === items.length
+      && items.every((it, k) => it.title === qItems[k].title && it.artist === qItems[k].artist)) {
+    qItems = items; list.querySelectorAll('.qr').forEach((r, k) => setQArt(r.querySelector('.qa'), items[k].art)); return;
+  }
+  qArm = null; clearTimeout(qArmT);
+  qItems = items;
+  list.innerHTML = '';
+  $('#q-st').textContent = q.state === 'ok' ? qItems.length + ' LAGU' : '';
+  if (q.state !== 'ok' || !qItems.length) {
+    const d = document.createElement('div'); d.className = 'q-msg'; d.textContent = q.state === 'ok' ? 'Senarai kosong.' : (Q_MSG[q.state] || Q_MSG.error);
+    list.appendChild(d); return;
+  }
+  qItems.forEach((it, i) => {
+    const r = document.createElement('div'); r.className = 'qr'; r.dataset.i = i;
+    r.innerHTML = '<span class="n"></span><span class="qa"></span><span class="m"><div class="t"></div><div class="a"></div></span><span class="d"></span>';
+    r.querySelector('.n').textContent = i + 1; r.querySelector('.t').textContent = it.title; setQArt(r.querySelector('.qa'), it.art);
+    r.querySelector('.a').textContent = it.artist + (it.album ? ' · ' + it.album : ''); r.querySelector('.d').textContent = it.dur || '';
+    list.appendChild(r);
+  });
+}
+(() => {
+  const list = $('#q-list'); let down = null;
+  list.addEventListener('pointerdown', e => { down = {x: e.clientX, y: e.clientY}; });
+  list.addEventListener('pointerup', e => {
+    const d = down; down = null;
+    if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) return;       // it was a scroll, not a tap
+    const row = e.target.closest('.qr'); if (!row) return;
+    const i = +row.dataset.i, it = qItems[i];
+    if (qArm === i) {                                                           // second tap on the same song: go
+      qArm = null; clearTimeout(qArmT); row.classList.remove('arm'); row.querySelector('.d').textContent = it.dur || '';
+      api('/api/queue/jump', {n: i + 1, title: it.title}); toast('Melompat: ' + it.title); return;   // YouTube Music plays it by title, Apple Music skips n songs
+    }
+    list.querySelectorAll('.qr.arm').forEach(x => { x.classList.remove('arm'); x.querySelector('.d').textContent = qItems[+x.dataset.i].dur || ''; });
+    qArm = i; row.classList.add('arm'); row.querySelector('.d').textContent = 'TAP LAGI';
+    clearTimeout(qArmT); qArmT = setTimeout(() => { qArm = null; row.classList.remove('arm'); row.querySelector('.d').textContent = it.dur || ''; }, 4000);
+  });
+})();
 
 const COLORS = ['var(--pink)', 'var(--green)', 'var(--yellow)', 'var(--cyan)', 'var(--orange)', 'var(--purple)'];
 async function buildApps() {

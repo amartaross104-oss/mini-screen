@@ -9,6 +9,7 @@ import ctypes
 import hashlib
 import json
 import os
+import queue as pyqueue
 import re
 import secrets
 import subprocess
@@ -62,11 +63,37 @@ LYRICS_CACHE = {}   # key -> list | None
 
 
 # ---------------------------------------------------------------- audio spectrum
+def _default_out_id():
+    """Id of Windows' CURRENT default output device (it changes when headphones / Bluetooth connect)."""
+    from pycaw.pycaw import AudioUtilities
+    dev = AudioUtilities.GetSpeakers()
+    return str(getattr(dev, "id", None) or dev.GetId())
+
+
 def spectrum_thread():
-    global SPECTRUM
+    """Keep the visualizer attached to whatever the default output device is right now.
+
+    A session captures one device; when the default device changes (headphones, Bluetooth, speakers) the
+    session ends, PyAudio is torn down (it caches the device list) and a new one starts on the new device.
+    """
     try:
-        import pyaudiowpatch as pyaudio
-        p = pyaudio.PyAudio()
+        _com_init()
+    except Exception:
+        pass
+    while True:
+        try:
+            _spectrum_session()
+        except Exception as e:  # visualizer is optional; keep retrying (e.g. the device vanished mid-song)
+            print(f"[visualizer] {e!r}", file=sys.stderr)
+        time.sleep(2)
+
+
+def _spectrum_session():
+    global SPECTRUM
+    import pyaudiowpatch as pyaudio
+    p = pyaudio.PyAudio()
+    try:
+        start_id = _default_out_id()
         wasapi = p.get_host_api_info_by_type(pyaudio.paWASAPI)
         spk = p.get_device_info_by_index(wasapi["defaultOutputDevice"])
         if not spk.get("isLoopbackDevice"):
@@ -113,10 +140,18 @@ def spectrum_thread():
                         frames_per_buffer=1024, input_device_index=spk["index"],
                         stream_callback=cb)
         stream.start_stream()
-        while stream.is_active():
-            time.sleep(1)
-    except Exception as e:  # visualizer is optional
-        print(f"[visualizer disabled] {e!r}", file=sys.stderr)
+        try:
+            while stream.is_active():
+                time.sleep(2)
+                if _default_out_id() != start_id:          # the default output changed: re-attach to the new one
+                    print("[visualizer] output device changed, re-attaching", file=sys.stderr)
+                    break
+        finally:
+            stream.stop_stream()
+            stream.close()
+    finally:
+        p.terminate()
+        SPECTRUM = SPECTRUM * 0
 
 
 # ---------------------------------------------------------------- volume (COM thread)
@@ -126,22 +161,17 @@ def _com_init():
 
 
 COM_POOL = ThreadPoolExecutor(1, initializer=_com_init)
-_endpoint = None
-
-
 def _vol_endpoint():
-    global _endpoint
-    if _endpoint is None:
-        from pycaw.pycaw import AudioUtilities
-        dev = AudioUtilities.GetSpeakers()
-        if hasattr(dev, "EndpointVolume"):
-            _endpoint = dev.EndpointVolume
-        else:
-            from comtypes import CLSCTX_ALL
-            from pycaw.pycaw import IAudioEndpointVolume
-            iface = dev.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            _endpoint = ctypes.cast(iface, ctypes.POINTER(IAudioEndpointVolume))
-    return _endpoint
+    # Ask Windows for the CURRENT default output device every time. It used to be cached once, so after switching
+    # to headphones the mini screen kept showing/changing the old speakers' volume.
+    from pycaw.pycaw import AudioUtilities
+    dev = AudioUtilities.GetSpeakers()
+    if hasattr(dev, "EndpointVolume"):
+        return dev.EndpointVolume
+    from comtypes import CLSCTX_ALL
+    from pycaw.pycaw import IAudioEndpointVolume
+    iface = dev.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+    return ctypes.cast(iface, ctypes.POINTER(IAudioEndpointVolume))
 
 
 def vol_op(delta=None, set_to=None, toggle_mute=False):
@@ -242,6 +272,244 @@ async def media_cmd(cmd):
     return bool(await fn())
 
 
+# ---------------------------------------------------------------- up next (Apple Music's Queue panel via UI Automation)
+# Windows' media session has no queue, but the Apple Music app exposes its "Playing Next" list to accessibility tools.
+# We read that list; we never change the queue (Apple Music offers no way to do that from outside).
+QUEUE = {"state": "init", "items": [], "rev": 0}   # state: ok | closed | no_app | other_app | error
+
+
+def _queue_snapshot(uia, UIA):
+    pids = [p.pid for p in psutil.process_iter(["name"]) if (p.info["name"] or "").lower().startswith("applemusic")]
+    root, win = uia.GetRootElement(), None
+    for pid in pids:
+        win = root.FindFirst(UIA.TreeScope_Children, uia.CreatePropertyCondition(UIA.UIA_ProcessIdPropertyId, pid))
+        if win:                                          # comtypes returns a NULL pointer (falsy), not None, when nothing matches
+            break
+    if not win:
+        return {"state": "no_app", "items": []}
+    by_type = lambda t: uia.CreatePropertyCondition(UIA.UIA_ControlTypePropertyId, t)
+    btn = win.FindFirst(UIA.TreeScope_Descendants, uia.CreateAndCondition(
+        uia.CreatePropertyCondition(UIA.UIA_NamePropertyId, "Queue"), by_type(UIA.UIA_ButtonControlTypeId)))
+    if not btn:
+        return {"state": "error", "items": []}          # the app's layout is not what we expect
+    tp = btn.GetCurrentPattern(UIA.UIA_TogglePatternId).QueryInterface(UIA.IUIAutomationTogglePattern)
+    if tp.CurrentToggleState == 0:                       # panel is closed
+        # Only open it ourselves while the Apple Music window is minimized (so nothing visibly changes on screen).
+        if win.CurrentIsOffscreen and load_cfg().get("queue_auto_open", True):
+            tp.Toggle()
+            time.sleep(0.9)
+        else:
+            return {"state": "closed", "items": []}
+    lists = win.FindAll(UIA.TreeScope_Descendants, by_type(UIA.UIA_ListControlTypeId))
+    q, best = None, None
+    for i in range(lists.Length):                         # the queue panel is the right-most list
+        l = lists.GetElement(i)
+        left = l.CurrentBoundingRectangle.left
+        if best is None or left > best:
+            q, best = l, left
+    if q is None:
+        return {"state": "ok", "items": []}
+    rows = q.FindAll(UIA.TreeScope_Children, by_type(UIA.UIA_ListItemControlTypeId))
+    items = []
+    for i in range(rows.Length):
+        texts = rows.GetElement(i).FindAll(UIA.TreeScope_Descendants, by_type(UIA.UIA_TextControlTypeId))
+        names = [texts.GetElement(k).CurrentName or "" for k in range(texts.Length)]
+        if not names or not names[0]:
+            continue                                      # a placeholder row that is not rendered yet
+        sub = names[1] if len(names) > 1 else ""
+        artist, _, album = sub.partition(" — ")     # "Artist — Album"
+        items.append({"title": names[0], "artist": artist.strip(), "album": album.strip(),
+                      "dur": names[-1] if len(names) > 2 else ""})
+    return {"state": "ok", "items": items}
+
+
+ITUNES_ART = {}   # (normalized title, normalized artist) -> (artwork url or "", when it was looked up)
+
+
+def itunes_art(title, artist):
+    """Album art for a song from the iTunes Search API (free, no key). Returns "" if no matching song is found.
+
+    Apple Music's own window gives no pictures for the queue rows, so this looks them up by title + artist and only
+    accepts a result whose title and artist match, never "the closest thing"."""
+    clean = re.sub(r"\s*[\(\[][^)\]]*[\)\]]", "", title).strip()
+    want_t = _norm(clean)
+    want_a = _norm(re.split(r",|&| feat\.? | x ", artist, flags=re.I)[0])
+    for country in ("MY", None):                        # the Malaysian storefront first, then the default one
+        params = {"term": f"{clean} {artist}", "entity": "song", "limit": 8}
+        if country:
+            params["country"] = country
+        req = urllib.request.Request("https://itunes.apple.com/search?" + urllib.parse.urlencode(params),
+                                     headers={"User-Agent": "MiniScreen/1.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=8) as r:
+                results = json.loads(r.read().decode("utf-8")).get("results", [])
+        except Exception:
+            continue
+        for r in results:
+            t, a = _norm(r.get("trackName")), _norm(r.get("artistName"))
+            if (t == want_t or (min(len(t), len(want_t)) >= 4 and (t in want_t or want_t in t))) \
+                    and (not want_a or want_a in a or a in want_a):
+                return r.get("artworkUrl100") or ""
+    return ""
+
+
+def _attach_art(items):
+    """Put art URLs on the queue items from the cache. At most ONE new lookup per call (the API allows ~20/minute).
+    Returns True while some songs still wait for their lookup."""
+    looked, pending = False, False
+    for it in items:
+        key = (_norm(it["title"]), _norm(it["artist"]))
+        hit = ITUNES_ART.get(key)
+        if hit is None or (not hit[0] and time.time() - hit[1] > 600):   # never looked up, or a miss older than 10 min
+            if not looked:
+                hit = ITUNES_ART[key] = (itunes_art(it["title"], it["artist"]), time.time())
+                looked = True
+            else:
+                pending = True
+        it["art"] = hit[0] if hit else ""
+    return pending
+
+
+# ---- YouTube Music (in Edge): the "Up next" list on the Now Playing page. Edge only exposes page content to
+# accessibility tools when "Web accessibility" is switched on in edge://accessibility.
+QUEUE_CMDS = pyqueue.Queue()   # actions for the UI Automation thread (it owns the COM objects)
+_TIME_RE = re.compile(r"^\d{1,2}:\d{2}(:\d{2})?$")
+
+
+def _ytm_window(uia, UIA):
+    wins = uia.GetRootElement().FindAll(UIA.TreeScope_Children, uia.CreatePropertyCondition(
+        UIA.UIA_ControlTypePropertyId, UIA.UIA_WindowControlTypeId))
+    for i in range(wins.Length):
+        w = wins.GetElement(i)
+        if "YouTube Music" in (w.CurrentName or ""):
+            return w
+    return None
+
+
+def _ytm_doc(win, uia, UIA):
+    return win.FindFirst(UIA.TreeScope_Descendants, uia.CreatePropertyCondition(
+        UIA.UIA_ControlTypePropertyId, UIA.UIA_DocumentControlTypeId))
+
+
+def _ytm_rows(doc, uia, UIA):
+    """Rows of the Up next list in page order. Each row has a "Play <title>" button ("Pause <title>" for the song that
+    is playing), a title, an artist line and a duration. Returns dicts with title/artist/dur/playing and the button."""
+    by_type = lambda t: uia.CreatePropertyCondition(UIA.UIA_ControlTypePropertyId, t)
+    els = doc.FindAll(UIA.TreeScope_Descendants, by_type(UIA.UIA_TextControlTypeId))
+    texts = []
+    for i in range(els.Length):
+        e = els.GetElement(i)
+        n = (e.CurrentName or "").strip()
+        if n:
+            r = e.CurrentBoundingRectangle
+            texts.append((r.top, r.left, n))
+    rows = []
+    btns = doc.FindAll(UIA.TreeScope_Descendants, by_type(UIA.UIA_ButtonControlTypeId))
+    for i in range(btns.Length):
+        b = btns.GetElement(i)
+        name = (b.CurrentName or "").strip()
+        for prefix, playing in (("Play ", False), ("Pause ", True)):
+            if name.startswith(prefix) and len(name) > len(prefix):
+                title, br = name[len(prefix):], b.CurrentBoundingRectangle
+                # the matching title text sits right next to the button; this also rejects stray "Play ..." buttons
+                head = next((t for t in texts if t[2] == title and abs(t[0] - br.top) <= 15 and t[1] > br.left), None)
+                if head is None:
+                    continue
+                artist = next((t[2] for t in texts if t[1] == head[1] and 8 < t[0] - head[0] < 40), "")
+                dur = next((t[2] for t in texts if _TIME_RE.match(t[2]) and abs(t[0] - head[0]) < 30), "")
+                rows.append({"top": head[0], "title": title, "artist": artist, "dur": dur, "playing": playing, "btn": b})
+                break
+    rows.sort(key=lambda r: r["top"])
+    return rows
+
+
+def _ytm_snapshot(uia, UIA, win):
+    doc = _ytm_doc(win, uia, UIA)
+    if not doc:
+        return {"state": "ytm_noaccess", "items": []}          # Edge is not exposing the page (web accessibility off)
+    tabs = doc.FindAll(UIA.TreeScope_Descendants, uia.CreatePropertyCondition(
+        UIA.UIA_ControlTypePropertyId, UIA.UIA_TabItemControlTypeId))
+    selected = False
+    for i in range(tabs.Length):
+        t = tabs.GetElement(i)
+        if (t.CurrentName or "").strip().upper() == "UP NEXT":
+            try:
+                selected = bool(t.GetCurrentPattern(UIA.UIA_SelectionItemPatternId)
+                                .QueryInterface(UIA.IUIAutomationSelectionItemPattern).CurrentIsSelected)
+            except Exception:
+                selected = False
+            break
+    if not selected:
+        return {"state": "ytm_closed", "items": []}             # the Now Playing page / UP NEXT tab is not showing
+    rows = _ytm_rows(doc, uia, UIA)
+    cur = next((i for i, r in enumerate(rows) if r["playing"]), None)
+    if cur is None:                                             # paused: the current row says "Play ..." too, so match by title
+        t = _norm((STATE.get("media") or {}).get("title"))
+        cur = next((i for i, r in enumerate(rows) if t and _norm(r["title"]) == t), None)
+    upcoming = rows[cur + 1:] if cur is not None else []        # unknown current song: show nothing rather than guess
+    return {"state": "ok", "source": "ytm",
+            "items": [{"title": r["title"], "artist": r["artist"], "album": "", "dur": r["dur"]} for r in upcoming]}
+
+
+def _ytm_play(uia, UIA, title):
+    """Play a song from the Up next list by pressing its own Play button (an exact jump, no skipping through songs)."""
+    win = _ytm_window(uia, UIA)
+    doc = _ytm_doc(win, uia, UIA) if win else None
+    if not doc:
+        return
+    rows = _ytm_rows(doc, uia, UIA)
+    cur = next((i for i, r in enumerate(rows) if r["playing"]), -1)
+    t = _norm(title)
+    target = (next((r for i, r in enumerate(rows) if i > cur and _norm(r["title"]) == t), None)
+              or next((r for r in rows if _norm(r["title"]) == t), None))
+    if target:
+        target["btn"].GetCurrentPattern(UIA.UIA_InvokePatternId).QueryInterface(UIA.IUIAutomationInvokePattern).Invoke()
+
+
+def queue_thread():
+    try:
+        import comtypes
+        import comtypes.client
+        comtypes.CoInitialize()
+        comtypes.client.GetModule("UIAutomationCore.dll")
+        from comtypes.gen import UIAutomationClient as UIA
+        uia = comtypes.client.CreateObject(UIA.CUIAutomation, interface=UIA.IUIAutomation)
+    except Exception as e:
+        print(f"[queue disabled] {e!r}", file=sys.stderr)
+        QUEUE.update(state="error")
+        return
+    last = None
+    while True:
+        delay = 3.0
+        try:
+            app = (STATE.get("media") or {}).get("app") or ""
+            win = None
+            if not app or "AppleMusic" in app:
+                snap = _queue_snapshot(uia, UIA)
+            elif "edge" in app.lower() and (win := _ytm_window(uia, UIA)):
+                snap = _ytm_snapshot(uia, UIA, win)
+            else:                                        # some other player: we have no way to read its queue
+                snap, delay = {"state": "other_app", "items": []}, 4.0
+            snap.setdefault("source", "apple")
+            if snap["state"] == "ok" and _attach_art(snap["items"]):
+                delay = 3.5                              # songs still waiting for art: keep under the lookup rate limit
+        except Exception as e:
+            print(f"[queue] {e!r}", file=sys.stderr)
+            snap, delay = {"state": "error", "items": []}, 6.0
+        if snap != last:
+            QUEUE.update(snap)
+            QUEUE["rev"] += 1
+            last = snap
+        try:                                             # wait for the next poll, but react to a tap on a song at once
+            cmd = QUEUE_CMDS.get(timeout=delay)
+            try:
+                _ytm_play(uia, UIA, cmd["title"])
+            except Exception as e:
+                print(f"[queue play] {e!r}", file=sys.stderr)
+        except pyqueue.Empty:
+            pass
+
+
 # ---------------------------------------------------------------- stats
 _last_net = None
 
@@ -332,26 +600,43 @@ def _lrclib(endpoint, params):
         return None
 
 
+def _norm(s):
+    return re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).strip()
+
+
 def fetch_lyrics(title, artist, duration):
     clean = re.sub(r"\s*[\(\[][^)\]]*(feat|ft|with)\.?[^)\]]*[\)\]]", "", title, flags=re.I).strip()
     first_artist = re.split(r",|&| feat\.? | x ", artist, flags=re.I)[0].strip()
+    want_title, want_artist = _norm(clean), _norm(first_artist)
+
+    def same_song(r):
+        """Only accept the SAME song. A title-only search used to return other artists' songs with the same title
+        (e.g. another "Khayalan"), which showed lyrics that did not belong to the playing song at all."""
+        if not r or not r.get("syncedLyrics"):
+            return False
+        t, a = _norm(r.get("trackName")), _norm(r.get("artistName"))
+        if not (t == want_title or (min(len(t), len(want_title)) >= 4 and (t in want_title or want_title in t))):
+            return False
+        if want_artist and a and not (want_artist in a or a in want_artist):
+            return False
+        if duration and r.get("duration") and abs(r["duration"] - duration) > 10:   # a very different length = another version
+            return False
+        return True
+
     data = None
-    # 1) exact match, 2) without duration, 3) cleaned title, 4) fuzzy search
+    # 1) exact match, 2) without duration, 3) cleaned title, 4) search restricted to the same song
     for t, a, d in ((title, artist, duration), (title, artist, 0), (clean, first_artist, 0)):
         p = {"track_name": t, "artist_name": a}
         if d:
             p["duration"] = int(d)
         data = _lrclib("get", p)
-        if data and data.get("syncedLyrics"):
+        if same_song(data):
             break
         data = None
     if not data:
-        for q in (f"{clean} {first_artist}", clean):
-            res = _lrclib("search", {"q": q}) or []
-            res = [r for r in res if r.get("syncedLyrics")]
-            if res:
-                data = min(res, key=lambda r: abs((r.get("duration") or 0) - duration) if duration else 0)
-                break
+        res = [r for r in (_lrclib("search", {"q": f"{clean} {first_artist}"}) or []) if same_song(r)]
+        if res:
+            data = min(res, key=lambda r: abs((r.get("duration") or 0) - duration) if duration else 0)
     if not data:
         return None
     lrc = data.get("syncedLyrics")
@@ -522,6 +807,26 @@ async def lyrics(req):
     return web.json_response({"lines": LYRICS_CACHE[key]})
 
 
+async def _skip_ahead(n):
+    for _ in range(n):
+        await media_cmd("next")
+        await asyncio.sleep(0.4)
+
+
+async def api_queue_jump(req):
+    """Jump to an upcoming song. YouTube Music: press that song's own Play button. Apple Music has no way to play a
+    chosen queue entry from outside, so there we press "next" n times."""
+    if not authed(req):
+        return web.Response(status=403)
+    body = await req.json()
+    if QUEUE.get("source") == "ytm" and body.get("title"):
+        QUEUE_CMDS.put({"title": str(body["title"])[:300]})
+        return web.json_response({"ok": True, "via": "ytm"})
+    n = max(1, min(40, int(body.get("n", 1))))
+    asyncio.get_running_loop().create_task(_skip_ahead(n))   # don't keep the phone waiting while it skips
+    return web.json_response({"ok": True, "n": n})
+
+
 async def api_media(req):
     if not authed(req):
         return web.Response(status=403)
@@ -591,11 +896,15 @@ async def ws_handler(req):
     ws = web.WebSocketResponse(heartbeat=20)
     await ws.prepare(req)
     tick = 0
+    sent_rev = -1
     try:
         while not ws.closed:
             msg = {"spec": [int(v * 100) for v in SPECTRUM]}
             if tick % 20 == 0:
                 msg.update(media=STATE["media"], stats=STATE["stats"], vol=STATE["vol"])
+                if QUEUE["rev"] != sent_rev:                 # the list is only sent when it changed
+                    msg["queue"] = {"state": QUEUE["state"], "items": QUEUE["items"][:40]}
+                    sent_rev = QUEUE["rev"]
             await ws.send_json(msg)
             tick += 1
             await asyncio.sleep(0.05)
@@ -636,6 +945,7 @@ def main():
     import threading
     threading.Thread(target=spectrum_thread, daemon=True).start()
     threading.Thread(target=temp_thread, daemon=True).start()
+    threading.Thread(target=queue_thread, daemon=True).start()
     app = web.Application(middlewares=[ip_guard])
     app.on_startup.append(on_start)
     app.add_routes([
@@ -644,6 +954,7 @@ def main():
         web.get("/shot.jpg", shot_preview), web.post("/api/shot/save", api_shot_save),
         web.post("/api/shot/cancel", api_shot_cancel),
         web.post("/api/media/{cmd:playpause|next|prev}", api_media),
+        web.post("/api/queue/jump", api_queue_jump),
         web.post("/api/volume", api_volume), web.post("/api/launch", api_launch),
         web.post("/api/system/{action:lock|sleep|desktop|shot}", api_system),
     ])

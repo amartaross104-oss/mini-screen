@@ -3,6 +3,7 @@
 Turn an old (or spare) Android phone into a small companion display for your Windows PC.
 
 - **Music**: now playing from any Windows media player (Apple Music, YouTube Music in a browser, etc.), album art, animated synced lyrics (smooth scroll, the current line grows and its words fill in as they are sung) and a live spectrum visualizer. Lyric timing can be nudged per song with the `-` / `+` buttons; the adjustment is remembered for that song. Volume is on the same screen: tap or drag the volume bar, or use `-` / `+` and mute.
+- **Queue** (Apple Music for Windows, and YouTube Music in Edge): the upcoming songs with album pictures, and what is playing now. Tap a song once to mark it and again to jump to it. See "Up next" below.
 - **Home**: big clock, prayer times (JAKIM method via Aladhan) with the next prayer countdown, PC stats (CPU, RAM, disk, network, temperature).
 - **Control**: launch-app buttons, lock, sleep, show desktop, and a screenshot tool where you crop the shot on the phone before it is saved.
 - **Burn-in care**: dim levels (the DIM button), small periodic pixel shift and a dark screen saver when nothing is playing.
@@ -86,7 +87,27 @@ The page contacts these from the phone, and the server contacts LRCLIB. Only the
 | [Aladhan](https://aladhan.com) | Prayer times | Latitude and longitude |
 | [BigDataCloud](https://www.bigdatacloud.com) | Place name from coordinates | Latitude and longitude |
 | [Open-Meteo Geocoding](https://open-meteo.com) | City search | The text you type |
+| [iTunes Search API](https://performance-partners.apple.com/search-api) | Album pictures in the Queue list | Song title and artist (the server asks; the phone then loads the pictures from Apple's image servers) |
 | Google Fonts | Pixel fonts (Silkscreen, VT323) | Standard font request |
+
+## Up next: YouTube Music (in Edge)
+
+The same idea works for the "Up next" list on YouTube Music's Now Playing page, with these differences:
+
+- Edge only exposes page content to accessibility tools when web accessibility is on. Open `edge://accessibility`, switch on **Native accessibility API support** and **Web accessibility**, then reload the YouTube Music tab. Without it the Queue tab says so.
+- The YouTube Music tab must be the active tab of its window, on the Now Playing page with the **UP NEXT** tab selected. The server never clicks around to open it for you.
+- Jumping presses the chosen song's own Play button, so it is exact (no songs in between are started).
+- Only Edge is supported. The list shown is what YouTube Music itself lists as upcoming; the server only reads it.
+
+## Up next (Apple Music queue)
+
+Windows' media session has no queue, but the Apple Music app exposes its "Playing Next" panel to accessibility tools (UI Automation). The server reads that list and never changes it.
+
+- The Queue panel in Apple Music must be open. While the Apple Music window is **minimized** the server opens the panel for you and leaves it open (set `"queue_auto_open": false` in `config.json` to disable that). While the window is visible on screen the server never touches it; open the panel yourself.
+- Only the rows Apple Music has rendered are visible (typically the next ~15-20 songs).
+- Album pictures for the list are looked up in the iTunes Search API by title and artist (a match is only accepted if both agree), cached, and filled in gradually (about one lookup every 3.5 s to stay under the API's rate limit); a song without a match shows a note symbol. The currently playing song, shown at the top, uses the picture from the media session.
+- Tapping a song jumps to it by pressing "next" repeatedly. Reordering or "play next" is not possible from outside the app.
+- This reads the app's own UI, so an Apple Music update can break it. If it does, the tab shows a message instead of the list.
 
 ## Known limits
 

@@ -3,6 +3,7 @@
   "host": "127.0.0.1",
   "allowed_ips": [],
   "screenshot_dir": "",
+  "queue_auto_open": true,
   "apps": [
     { "key": "D", "name": "Discord",   "target": "discord://" },
     { "key": "S", "name": "Steam",     "target": "steam://open/main" },
