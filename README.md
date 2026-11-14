@@ -2,10 +2,10 @@
 
 Turn an old (or spare) Android phone into a small companion display for your Windows PC.
 
-- **Music**: now playing from any Windows media player (Apple Music, YouTube Music in a browser, etc.), album art, animated synced lyrics (smooth scroll, the current line grows and its words fill in as they are sung) and a live spectrum visualizer. Lyric timing can be nudged per song with the `-` / `+` buttons; the adjustment is remembered for that song. Volume is on the same screen: tap or drag the volume bar, or use `-` / `+` and mute.
+- **Music**: now playing from any Windows media player (Apple Music, YouTube Music in a browser, etc.), album art, animated synced lyrics (smooth scroll, the current line grows and its words fill in as they are sung) and a live spectrum visualizer. Lyric timing can be nudged per song with the `-` / `+` buttons; the adjustment is remembered for that song, and songs you have not adjusted yet start from what you usually need for that player (the median of your adjustments, once there are three). Play/pause targets the app that is actually playing (a YouTube video, Apple TV, a movie player), uses separate Play/Pause calls for apps that do not support a toggle, and falls back to the Windows media key. Volume is on the same screen: tap or drag the volume bar, or use `-` / `+` and mute.
 - **Queue** (Apple Music for Windows, and YouTube Music in Edge): the upcoming songs with album pictures, and what is playing now. Tap a song once to mark it and again to jump to it. See "Up next" below.
 - **Home**: big clock, prayer times (JAKIM method via Aladhan) with the next prayer countdown, PC stats (CPU, RAM, disk, network, temperature).
-- **Control**: launch-app buttons, lock, sleep, show desktop, and a screenshot tool where you crop the shot on the phone before it is saved.
+- **Control**: launch-app buttons (each shows the app's own logo, see "App logos" below), lock, sleep, show desktop, and a screenshot tool where you crop the shot on the phone before it is saved.
 - **Burn-in care**: dim levels (the DIM button), small periodic pixel shift and a dark screen saver when nothing is playing.
 
 A small Python server runs on the PC. The phone just opens a web page in its browser, so there is nothing to install on the phone.
@@ -108,6 +108,10 @@ Windows' media session has no queue, but the Apple Music app exposes its "Playin
 - Album pictures for the list are looked up in the iTunes Search API by title and artist (a match is only accepted if both agree), cached, and filled in gradually (about one lookup every 3.5 s to stay under the API's rate limit); a song without a match shows a note symbol. The currently playing song, shown at the top, uses the picture from the media session.
 - Tapping a song jumps to it by pressing "next" repeatedly. Reordering or "play next" is not possible from outside the app.
 - This reads the app's own UI, so an Apple Music update can break it. If it does, the tab shows a message instead of the list.
+
+## App logos
+
+The launch buttons show each app's own logo. Run `make_icons.ps1` (in this folder, Windows PowerShell) once, and again after you add apps: it reads `config.json` and saves a PNG per app into `icons/`, taken from the apps installed on your PC (Store app logos, `steam.exe`, `msedge.exe`...). The `icons/` folder is not part of the repository (it holds other companies' logos), so each user creates it locally. Apps without a local logo (a website, a folder) fall back to a small drawn icon, then to the key letter. The server only serves plain `*.png` files from `icons/`, and only with the access token.
 
 ## Known limits
 

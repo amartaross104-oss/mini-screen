@@ -26,6 +26,12 @@ import psutil
 from aiohttp import web
 
 BASE = Path(__file__).parent
+def sorted_apps(cfg):
+    """The app buttons in alphabetical order. The page asks to launch app number N, so the list the page shows and the
+    list the launcher uses must be the same; both go through this one function."""
+    return sorted(cfg["apps"], key=lambda a: a["name"].casefold())
+
+
 def load_cfg():
     """Re-read config.json each time so edits apply without restarting."""
     return json.loads((BASE / "config.json").read_text(encoding="utf-8"))
@@ -204,11 +210,28 @@ async def media_manager():
     return await M.request_async()
 
 
+def pick_session(mgr):
+    """The session the user means: the one that is actually playing.
+
+    Windows' "current" session is just the most recently active app, which can be a paused one while a video (YouTube,
+    Apple TV, a movie player) plays in another app. Showing and controlling that one made the buttons seem dead."""
+    from winrt.windows.media.control import GlobalSystemMediaTransportControlsSessionPlaybackStatus as PS
+    sessions = mgr.get_sessions()
+    everyone = [sessions.get_at(i) for i in range(sessions.size)]
+    cur = mgr.get_current_session()
+    playing = [s for s in everyone if s.get_playback_info().playback_status == PS.PLAYING]
+    if cur is not None and any(s.source_app_user_model_id == cur.source_app_user_model_id for s in playing):
+        return cur
+    if playing:
+        return playing[0]
+    return cur or (everyone[0] if everyone else None)
+
+
 async def read_media():
     from winrt.windows.media.control import GlobalSystemMediaTransportControlsSessionPlaybackStatus as PS
     from winrt.windows.storage.streams import DataReader
     mgr = await media_manager()
-    ses = mgr.get_current_session()
+    ses = pick_session(mgr)
     if ses is None:
         return None
     props = await ses.try_get_media_properties_async()
@@ -262,14 +285,31 @@ async def read_media():
 
 
 async def media_cmd(cmd):
+    """Play/pause/next/previous on the playing app. Returns {"ok", "via"}.
+
+    Not every app supports the single "toggle" command (video apps often only offer separate Play and Pause), so
+    pause/play is chosen from the app's real state. If the app still refuses, the Windows media key is sent."""
+    from winrt.windows.media.control import GlobalSystemMediaTransportControlsSessionPlaybackStatus as PS
     mgr = await media_manager()
-    ses = mgr.get_current_session()
-    if ses is None:
-        return False
-    fn = {"playpause": ses.try_toggle_play_pause_async,
-          "next": ses.try_skip_next_async,
-          "prev": ses.try_skip_previous_async}[cmd]
-    return bool(await fn())
+    ses = pick_session(mgr)
+    if ses is not None:
+        pb = ses.get_playback_info()
+        c, playing = pb.controls, pb.playback_status == PS.PLAYING
+        if cmd == "playpause":
+            attempts = [ses.try_pause_async] if (playing and c.is_pause_enabled) else \
+                       [ses.try_play_async] if (not playing and c.is_play_enabled) else []
+            attempts.append(ses.try_toggle_play_pause_async)
+        else:
+            attempts = [ses.try_skip_next_async if cmd == "next" else ses.try_skip_previous_async]
+        for fn in attempts:
+            try:
+                if await fn():
+                    return {"ok": True, "via": "session"}
+            except Exception as e:
+                print(f"[media {cmd}] {e!r}", file=sys.stderr)
+    # No session, or the app did not accept the command: the media key goes to whatever Windows treats as active.
+    key_combo({"playpause": 0xB3, "next": 0xB0, "prev": 0xB1}[cmd])   # VK_MEDIA_PLAY_PAUSE / NEXT_TRACK / PREV_TRACK
+    return {"ok": True, "via": "key"}
 
 
 # ---------------------------------------------------------------- up next (Apple Music's Queue panel via UI Automation)
@@ -623,20 +663,29 @@ def fetch_lyrics(title, artist, duration):
             return False
         return True
 
-    data = None
-    # 1) exact match, 2) without duration, 3) cleaned title, 4) search restricted to the same song
+    # The same song often exists in several versions (single, album, remaster, live) whose lyric timings differ by
+    # seconds. That was why lyrics had to be nudged by hand. So: collect every matching version and use the one whose
+    # length is closest to the song that is actually playing.
+    def gap(r):
+        return abs((r.get("duration") or 0) - duration) if duration else 0
+
+    cands = {}
+    # 1) exact lookup, 2) without duration, 3) cleaned title; stop as soon as a version of (almost) the same length is found
     for t, a, d in ((title, artist, duration), (title, artist, 0), (clean, first_artist, 0)):
         p = {"track_name": t, "artist_name": a}
         if d:
             p["duration"] = int(d)
-        data = _lrclib("get", p)
-        if same_song(data):
-            break
-        data = None
-    if not data:
-        res = [r for r in (_lrclib("search", {"q": f"{clean} {first_artist}"}) or []) if same_song(r)]
-        if res:
-            data = min(res, key=lambda r: abs((r.get("duration") or 0) - duration) if duration else 0)
+        r = _lrclib("get", p)
+        if same_song(r):
+            cands[r.get("id") or len(cands)] = r
+            if not duration or gap(r) <= 2.5:
+                break
+    # 4) otherwise look at every version LRCLIB lists for this song
+    if not cands or min(gap(r) for r in cands.values()) > 2.5:
+        for r in (_lrclib("search", {"q": f"{clean} {first_artist}"}) or []):
+            if same_song(r):
+                cands[r.get("id") or len(cands)] = r
+    data = min(cands.values(), key=gap) if cands else None
     if not data:
         return None
     lrc = data.get("syncedLyrics")
@@ -719,7 +768,7 @@ def do_system(action):
 
 
 def launch(index):
-    app = load_cfg()["apps"][index]
+    app = sorted_apps(load_cfg())[index]
     subprocess.Popen(["cmd", "/c", "start", "", app["target"]], creationflags=0x08000000)
 
 
@@ -772,11 +821,37 @@ async def index(req):
     return web.FileResponse(BASE / "index.html")
 
 
+async def api_ping(req):
+    """Tiny reply used by the phone to measure its round-trip time to the PC."""
+    if not authed(req):
+        return web.Response(status=403)
+    return web.Response(text="ok", headers={"Cache-Control": "no-store"})
+
+
 async def config(req):
     if not authed(req):
         return web.Response(status=403)
     c = load_cfg()
-    return web.json_response({"apps": c["apps"], "prayer": c["prayer"]})
+    apps = []
+    for a in sorted_apps(c):
+        slug = re.sub(r"[^a-z0-9]+", "-", a["name"].lower()).strip("-")
+        has_png = (BASE / "icons" / f"{slug}.png").is_file()          # made by make_icons.ps1 from the installed apps
+        apps.append({**a, "slug": slug, **({"icon_png": f"{slug}.png"} if has_png else {})})
+    return web.json_response({"apps": apps, "prayer": c["prayer"]})
+
+
+_ICON_RE = re.compile(r"^[a-z0-9][a-z0-9-]*\.png$")
+
+
+async def icon_file(req):
+    """App logos from the icons folder. Only plain *.png names are accepted, so nothing else on disk can be reached."""
+    if not authed(req):
+        return web.Response(status=403)
+    name = req.match_info["name"]
+    path = BASE / "icons" / name
+    if not _ICON_RE.match(name) or not path.is_file():
+        return web.Response(status=404)
+    return web.FileResponse(path, headers={"Cache-Control": "max-age=86400"})
 
 
 async def api_location(req):
@@ -830,7 +905,7 @@ async def api_queue_jump(req):
 async def api_media(req):
     if not authed(req):
         return web.Response(status=403)
-    return web.json_response({"ok": await media_cmd(req.match_info["cmd"])})
+    return web.json_response(await media_cmd(req.match_info["cmd"]))
 
 
 async def api_volume(req):
@@ -951,6 +1026,7 @@ def main():
     app.add_routes([
         web.get("/", index), web.get("/ws", ws_handler), web.get("/api/config", config),
         web.get("/art", art), web.get("/api/lyrics", lyrics), web.get("/api/location", api_location),
+        web.get("/api/ping", api_ping), web.get("/icons/{name}", icon_file),
         web.get("/shot.jpg", shot_preview), web.post("/api/shot/save", api_shot_save),
         web.post("/api/shot/cancel", api_shot_cancel),
         web.post("/api/media/{cmd:playpause|next|prev}", api_media),

@@ -26,6 +26,16 @@ button:active,button.hold{background:var(--c,var(--fg));color:#000}
 
 /* tabs */
 #tabs{display:flex;gap:6px}
+/* connection indicator: green Wi-Fi = connected and data is arriving, amber blinking = connecting, red + slash = no connection */
+#ping{font:700 9px 'Silkscreen',monospace;line-height:1;margin-top:2px;color:var(--dim);white-space:nowrap}
+#ping.good{color:var(--green)}#ping.mid{color:var(--yellow)}#ping.bad{color:var(--red)}
+#link{flex:none;width:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px solid var(--red);color:var(--red);transition:color .25s,border-color .25s,box-shadow .25s}
+#link .slash{display:none}
+#link.down .slash{display:inline}
+#link.ok{color:var(--green);border-color:var(--green);box-shadow:0 0 6px rgba(109,255,90,.35)}
+#link.ok.beat{box-shadow:0 0 14px rgba(109,255,90,.95)}
+#link.wait{color:var(--yellow);border-color:var(--yellow);animation:linkblink 1s steps(2,jump-none) infinite}
+@keyframes linkblink{50%{opacity:.35}}
 #tabs button{flex:1;padding:4px;font-size:12px;border-width:2px;color:var(--dim);border-color:#333}
 #tabs button.on{color:#000;background:var(--cyan);border-color:var(--cyan)}
 
@@ -116,6 +126,11 @@ button:active,button.hold{background:var(--c,var(--fg));color:#000}
 #c-apps{grid-column:1;grid-row:1;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;align-content:start}
 #c-apps button{display:flex;gap:6px;align-items:center;font-size:13px;text-align:left;padding:5px}
 #c-apps button span{background:var(--c);color:#000;padding:0 5px}
+#c-apps button span.ic{background:none;padding:0;display:flex;align-items:center}
+#c-apps button span.ic img{width:20px;height:20px;border-radius:4px;object-fit:contain}
+/* SYSTEM buttons: icon above the label */
+#c-sys button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+#c-sys .si{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 #c-sys{grid-column:1/3;grid-row:2;display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
 #c-sys button{font-size:13px;height:100%;border-width:3px}
 /* screen saver (burn-in protection) */
@@ -219,15 +234,15 @@ button:active,button.hold{background:var(--c,var(--fg));color:#000}
     <section class="screen" id="s-ctrl">
       <div class="panel cy" id="c-apps"><span class="tag">APPS</span></div>
       <div class="panel or" id="c-sys"><span class="tag">SYSTEM</span>
-        <button class="cy" data-s="shot">SHOT</button>
-        <button class="gr" data-s="desktop">DESKTOP</button>
-        <button class="yl" data-go="home">BIG CLOCK</button>
-        <button class="rd" data-s="lock" data-hold="1">HOLD<br>LOCK</button>
-        <button class="rd" data-s="sleep" data-hold="1">HOLD<br>SLEEP</button>
+        <button class="cy" data-s="shot"><svg class="si" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>SHOT</button>
+        <button class="gr" data-s="desktop"><svg class="si" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1"/><path d="M8 20h8M12 16v4"/></svg>DESKTOP</button>
+        <button class="yl" data-go="home"><svg class="si" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>BIG CLOCK</button>
+        <button class="rd" data-s="lock" data-hold="1"><svg class="si" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span>HOLD<br>LOCK</span></button>
+        <button class="rd" data-s="sleep" data-hold="1"><svg class="si" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><span>HOLD<br>SLEEP</span></button>
       </div>
     </section>
   </div>
-  <nav id="tabs"><button data-go="music">MUSIC</button><button data-go="queue">QUEUE</button><button data-go="home">HOME</button><button data-go="ctrl">CONTROL</button><button id="dim" style="flex:.45">DIM 100</button><button id="rf">FULL / REFRESH</button><button id="flip">FLIP</button></nav>
+  <nav id="tabs"><span id="link" class="wait" title="Menyambung..."><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M2 9a15 15 0 0 1 20 0"/><path d="M5.2 12.6a10.5 10.5 0 0 1 13.6 0"/><path d="M8.6 16.1a5.6 5.6 0 0 1 6.8 0"/><circle cx="12" cy="19.6" r="1.3" fill="currentColor" stroke="none"/><path class="slash" d="M3 3L21 21"/></svg><b id="ping">--</b></span><button data-go="music">MUSIC</button><button data-go="queue">QUEUE</button><button data-go="home">HOME</button><button data-go="ctrl">CONTROL</button><button id="dim" style="flex:.45">DIM 100</button><button id="rf">FULL / REFRESH</button><button id="flip">FLIP</button></nav>
 </div>
 </div>
 
@@ -329,7 +344,7 @@ function connect() {
       }
       onMedia();
     }
-    if (m.stats) onStats(m.stats);
+    if (m.stats) { onStats(m.stats); linkBeat(); }
     if (m.queue) onQueue(m.queue);
     if (m.vol && Date.now() > volHold) onVol(m.vol);   // don't let the PC's older reading jump the bar while I'm dragging it
   };
@@ -365,6 +380,42 @@ setInterval(() => {
   if ((st === 1 && quiet > 5000) || (st === 2 && quiet > 3000) || (st === 0 && Date.now() - connAt > 8000)) dropAndReconnect();
 }, 2000);
 function setConn(t) { const c = $('#conn'); c.textContent = t; c.style.display = t ? 'block' : 'none'; }
+// ---- connection indicator (bottom bar, far left)
+let linkBadSince = 0, linkState = '';
+function linkBeat() {                                    // a quick glow each time a full update (about once a second) arrives
+  const l = $('#link'); l.classList.add('beat'); setTimeout(() => l.classList.remove('beat'), 180);
+}
+function updateLink() {
+  const open = !!(ws && ws.readyState === 1), fresh = Date.now() - lastMsg < 4000, now = Date.now();
+  let st = open && fresh ? 'ok' : ((ws && ws.readyState === 0) || open) ? 'wait' : 'down';   // connecting / silent socket = waiting
+  if (st === 'ok') linkBadSince = 0;
+  else { if (!linkBadSince) linkBadSince = now; if (st === 'down' && now - linkBadSince < 5000) st = 'wait'; }   // a brief drop is not an outage yet
+  if (st === linkState) return; linkState = st;
+  const l = $('#link'); l.classList.remove('ok', 'wait', 'down'); l.classList.add(st);
+  l.title = st === 'ok' ? 'Bersambung ke PC' : st === 'wait' ? 'Menyambung...' : 'Tiada sambungan ke PC';
+}
+setInterval(updateLink, 500); updateLink();
+// ---- latency: a tiny request to the PC every 2 s; the number shown is the median of the last 5 round trips
+const pings = []; let pinging = false;
+function showPing(ms) {
+  const p = $('#ping');
+  if (ms === null) { p.textContent = '--'; p.className = ''; return; }
+  p.textContent = ms >= 1000 ? (ms / 1000).toFixed(1) + 's' : Math.round(ms) + 'ms';
+  p.className = ms < 60 ? 'good' : ms < 150 ? 'mid' : 'bad';        // under 60 ms is great, over 150 ms will feel laggy
+}
+async function pingOnce() {
+  if (pinging || document.visibilityState !== 'visible') return;
+  pinging = true;
+  try {
+    const t0 = performance.now();
+    const r = await fetch('/api/ping?_=' + Date.now(), {cache: 'no-store', headers: {'X-Token': TOKEN}, signal: AbortSignal.timeout(3000)});
+    if (!r.ok) throw new Error('bad status');
+    pings.push(performance.now() - t0); if (pings.length > 5) pings.shift();
+    const s = [...pings].sort((a, b) => a - b); showPing(s[Math.floor(s.length / 2)]);
+  } catch (e) { pings.length = 0; showPing(null); }                  // no answer: show "--" instead of an old number
+  finally { pinging = false; }
+}
+setInterval(pingOnce, 2000); setTimeout(pingOnce, 500);
 connect();
 
 // ---- media
@@ -474,20 +525,33 @@ function lyFrame(now) {
 requestAnimationFrame(lyFrame);
 let lastLy = -2;
 // Lyric timing offset (seconds), remembered PER SONG: different recordings/versions need different values.
-// Positive = show lines earlier. Songs you never adjusted use LY_BASE. A "*" means this song has its own value.
+// Positive = show lines earlier. "*" = this song has its own value. "~" = a NEW song: no value yet, so it starts from what
+// you usually need for that player (the median of the songs you adjusted on it, once there are at least 3); otherwise LY_BASE.
+// So the more songs you correct, the less you have to correct the next ones.
 const LY_BASE = 0.3;
-let lyOffs = {}; try { lyOffs = JSON.parse(localStorage.getItem('lyoffs') || '{}'); } catch (e) {}
+let lyOffs = {}, lySrc = {};
+try { lyOffs = JSON.parse(localStorage.getItem('lyoffs') || '{}'); lySrc = JSON.parse(localStorage.getItem('lyoffsrc') || '{}'); } catch (e) {}
 let lyOff = LY_BASE;
-const saveOffs = () => { try { localStorage.setItem('lyoffs', JSON.stringify(lyOffs)); } catch (e) {} };
-function showOff() { $('#ly-v').textContent = (lyOff >= 0 ? '+' : '') + lyOff.toFixed(2) + 's' + (lyKey in lyOffs ? ' *' : ''); }
-function loadOff() { const v = lyOffs[lyKey]; lyOff = typeof v === 'number' ? v : LY_BASE; showOff(); lastLy = -2; }   // called when the song changes
+const saveOffs = () => { try { localStorage.setItem('lyoffs', JSON.stringify(lyOffs)); localStorage.setItem('lyoffsrc', JSON.stringify(lySrc)); } catch (e) {} };
+const lyCat = () => { const a = (media && media.app) || ''; return /AppleMusic/i.test(a) ? 'apple' : /edge/i.test(a) ? 'ytm' : 'other'; };   // which player is it
+function learnedBase() {
+  const c = lyCat(), v = Object.keys(lyOffs).filter(k => lySrc[k] === c && typeof lyOffs[k] === 'number').map(k => lyOffs[k]).sort((a, b) => a - b);
+  if (v.length < 3) return null;
+  const m = v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2;
+  return Math.round(Math.max(-1.5, Math.min(2.5, m)) * 20) / 20;
+}
+function showOff() { $('#ly-v').textContent = (lyOff >= 0 ? '+' : '') + lyOff.toFixed(2) + 's' + (lyKey in lyOffs ? ' *' : learnedBase() !== null ? ' ~' : ''); }
+function loadOff() {                            // called when the song changes
+  const v = lyOffs[lyKey], b = learnedBase();
+  lyOff = typeof v === 'number' ? v : b !== null ? b : LY_BASE; showOff(); lastLy = -2;
+}
 function stepOff(d) {
   if (!lyKey) return;
   lyOff = Math.max(-10, Math.min(10, Math.round((lyOff + d) * 100) / 100));
-  lyOffs[lyKey] = lyOff; saveOffs(); showOff(); lastLy = -2;
+  lyOffs[lyKey] = lyOff; lySrc[lyKey] = lyCat(); saveOffs(); showOff(); lastLy = -2;
 }
 // Tap the value to forget this song's adjustment.
-$('#ly-v').onclick = () => { if (lyKey in lyOffs) { delete lyOffs[lyKey]; saveOffs(); loadOff(); toast('Pelarasan dibuang'); } };
+$('#ly-v').onclick = () => { if (lyKey in lyOffs) { delete lyOffs[lyKey]; delete lySrc[lyKey]; saveOffs(); loadOff(); toast('Pelarasan dibuang'); } };
 // Hold - / + to keep stepping.
 function holdBtn(btn, d) {
   let t = null, iv = null;
@@ -506,7 +570,16 @@ function tickMedia() {
     $('#q-bar i').style.width = d ? Math.min(100, p / d * 100) + '%' : '0';
   }
 }
-document.querySelectorAll('[data-m]').forEach(b => b.onclick = () => api('/api/media/' + b.dataset.m, {}));
+document.querySelectorAll('[data-m]').forEach(b => b.onclick = async () => {
+  const cmd = b.dataset.m;
+  try {
+    const r = await api('/api/media/' + cmd, {});
+    if (cmd === 'playpause' && r.ok && media) {            // flip the play/pause icon at once; the PC's next update confirms it
+      media.position = pos(); media.playing = !media.playing; mediaAt = performance.now(); onMedia();
+    }
+    if (r.via === 'key') toast('Dihantar melalui kekunci media Windows');   // the app itself refused; the key is the fallback
+  } catch (e) { toast('Tiada sambungan ke PC'); }
+});
 
 // ---- visualizer
 const cv = $('#viz canvas'), cx = cv.getContext('2d');
@@ -833,12 +906,30 @@ function onQueue(q) {
 })();
 
 const COLORS = ['var(--pink)', 'var(--green)', 'var(--yellow)', 'var(--cyan)', 'var(--orange)', 'var(--purple)'];
+// Icons for the app buttons. In order of preference: the app's own logo (icons/<name>.png, made by make_icons.ps1 from the
+// apps installed on the PC), a drawn icon below (by "icon" in config.json, or by the app's name), then the key letter.
+const APP_ICONS = {
+  youtube: {color: '#ff3b3b', svg: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="1.5" y="5" width="21" height="14" rx="4" fill="#ff0000"/><path d="M10 9.2v5.6l5-2.8z" fill="#fff"/></svg>'},
+  'yt-music': {color: '#ff3b3b', svg: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="10.5" fill="#ff0000"/><circle cx="12" cy="12" r="6.4" fill="none" stroke="#fff" stroke-width="1.5"/><path d="M10.4 8.9v6.2l5-3.1z" fill="#fff"/></svg>'},
+  movie: {color: '#f5b83d', svg: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M2 6.5A2.5 2.5 0 0 1 4.5 4H9l2 2.2h8.5A2.5 2.5 0 0 1 22 8.7v9.8a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 18.5z" fill="#f5b83d"/><path d="M10 10.3v5.4l4.4-2.7z" fill="#1a1100"/></svg>'},
+  whatsapp: {color: '#25D366', svg:'<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#25D366" d="M12.04 2a9.9 9.9 0 0 0-8.5 14.95L2 22l5.2-1.36A9.9 9.9 0 1 0 12.04 2z"/><path fill="#fff" d="M16.6 14.2c-.2-.1-1.4-.7-1.6-.8-.2-.1-.4-.1-.6.1-.2.2-.6.8-.8 1-.1.2-.3.2-.5.1-.7-.3-1.4-.7-2.1-1.4-.6-.5-1-1.2-1.2-1.4-.1-.2 0-.3.1-.5l.4-.5c.1-.2.2-.3.2-.5.1-.1 0-.3 0-.5-.1-.1-.6-1.4-.8-1.9-.2-.5-.4-.4-.6-.4h-.4c-.2 0-.5.1-.7.3-.2.3-.9.9-.9 2.2s.9 2.5 1.1 2.7c.1.2 1.8 2.8 4.4 3.9 1.6.7 2.3.7 3.1.6.5-.1 1.4-.6 1.6-1.2.2-.6.2-1.1.1-1.2-.1-.1-.3-.2-.5-.3z"/></svg>'}
+};
 async function buildApps() {
   cfg = await api('/api/config');
   const box = $('#c-apps'); box.querySelectorAll('button').forEach(b => b.remove());   // keep the tag, rebuild the buttons
   cfg.apps.forEach((a, i) => {
-    const b = document.createElement('button'); b.style.setProperty('--c', COLORS[i % COLORS.length]);
-    b.innerHTML = `<span>${a.key}</span>${a.name}`; b.onclick = () => { api('/api/launch', {i}); toast(a.name); };
+    const drawn = APP_ICONS[a.icon] || APP_ICONS[a.slug];
+    const b = document.createElement('button'); b.style.setProperty('--c', drawn ? drawn.color : COLORS[i % COLORS.length]);
+    const badge = document.createElement('span'), letter = () => { badge.className = ''; badge.innerHTML = ''; badge.textContent = a.key; };
+    if (a.icon_png) {                                                    // the app's real logo from this PC
+      badge.className = 'ic'; const img = document.createElement('img');
+      img.src = '/icons/' + encodeURIComponent(a.icon_png) + '?t=' + encodeURIComponent(TOKEN); img.alt = ''; img.width = img.height = 20;
+      img.onerror = () => { if (drawn) { badge.innerHTML = drawn.svg; } else letter(); };    // missing/blocked file: drawn icon or the letter
+      badge.appendChild(img);
+    } else if (drawn) { badge.className = 'ic'; badge.innerHTML = drawn.svg; }
+    else badge.textContent = a.key;
+    b.appendChild(badge); b.appendChild(document.createTextNode(a.name));
+    b.onclick = () => { api('/api/launch', {i}); toast(a.name); };
     box.appendChild(b);
   });
 }

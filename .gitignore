@@ -3,6 +3,9 @@
 phone_url.txt
 config.json
 
+# App logos extracted from this PC's installed apps (other companies' artwork): each user makes their own
+icons/
+
 # Python
 .venv/
 __pycache__/
