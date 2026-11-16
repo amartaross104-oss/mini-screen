@@ -74,15 +74,14 @@ button:active,button.hold{background:var(--c,var(--fg));color:#000}
 /* CLEAN style: big rounded cover, title/artist, thin progress bar with times, simple icon controls (the lyrics icon shows/hides lyrics) */
 #amb{display:none;position:absolute;inset:0;overflow:hidden;border-radius:12px;pointer-events:none;background:var(--base,#1e1e1e);transition:opacity .35s}
 #s-music.clean #amb{display:block}
-#amb i{position:absolute;width:75%;height:150%;border-radius:50%;background:radial-gradient(closest-side,var(--c,#333),transparent);opacity:.95;will-change:transform}
-#amb i:nth-child(1){left:-20%;top:-40%;animation:amb1 19s ease-in-out infinite alternate}
-#amb i:nth-child(2){right:-20%;top:-45%;animation:amb2 23s ease-in-out infinite alternate}
-#amb i:nth-child(3){left:-15%;bottom:-60%;animation:amb3 27s ease-in-out infinite alternate}
-#amb i:nth-child(4){right:-15%;bottom:-55%;animation:amb4 21s ease-in-out infinite alternate}
-@keyframes amb1{to{transform:translate(45%,30%) scale(1.15)}}
-@keyframes amb2{to{transform:translate(-40%,40%) scale(.9)}}
-@keyframes amb3{to{transform:translate(40%,-35%) scale(1.1)}}
-@keyframes amb4{to{transform:translate(-45%,-30%) scale(1.2)}}
+/* Apple-Music-like motion: three big, soft (pre-blurred) copies of the cover that spin and breathe at different speeds, so colours swirl and mix */
+#amb i{position:absolute;left:50%;top:50%;width:150%;aspect-ratio:1;translate:-50% -50%;background:center/100% 100%;will-change:rotate,scale}
+#amb i:nth-child(1){animation:ambR 38s linear infinite,ambS 11s ease-in-out infinite alternate}
+#amb i:nth-child(2){left:22%;top:85%;opacity:.7;animation:ambR 52s linear infinite reverse,ambS 14s ease-in-out infinite alternate-reverse}
+#amb i:nth-child(3){left:80%;top:10%;opacity:.65;animation:ambR 31s linear infinite,ambS 9s ease-in-out infinite alternate}
+@keyframes ambR{to{rotate:360deg}}
+@keyframes ambS{from{scale:.8}to{scale:1.3}}
+#amb::after{content:'';position:absolute;inset:0;background:rgba(0,0,0,.3)}   /* keeps the white text readable */
 #s-music.clean{grid-template-columns:42% 1fr;grid-template-rows:1fr;background:#1e1e1e;border-radius:12px;font-family:system-ui,'Segoe UI',Roboto,sans-serif}
 #s-music.clean.nolyr{grid-template-columns:1fr}
 #s-music.clean .panel{border:0;background:transparent}
@@ -247,7 +246,7 @@ button:active,button.hold{background:var(--c,var(--fg));color:#000}
 <div id="app" class="nobar">
   <div id="screens">
     <section class="screen" id="s-music">
-      <div id="amb"><i></i><i></i><i></i><i></i></div>
+      <div id="amb"><i></i><i></i><i></i></div>
       <div class="panel" id="m-card"><span class="tag">MUSIC</span><span class="tag r" id="m-app">-</span>
         <div id="art"></div><div id="m-title">Tiada lagu</div><div id="m-artist">-</div>
         <button id="st-btn">CLEAN</button>
@@ -680,35 +679,29 @@ function applyLyHide() {
 }
 $('#ly-hide').onclick = () => { lyHidden = !lyHidden; try { localStorage.setItem('lyhide', lyHidden ? '1' : '0'); } catch (e) {} applyLyHide(); };
 $('#ly-tog').onclick = $('#ly-hide').onclick;
-// Moving background for the CLEAN style: four soft colour blobs taken from the cover (one per quarter of the picture), drifting slowly.
-// Every song gets its own colours. Colours are darkened so the white text stays readable.
+// Moving background for the CLEAN style, built from the current cover (see the #amb CSS), so every song looks different.
 function ambFrom(url) {
   const amb = $('#amb');
-  const set = cols => {
+  const set = (pic, base) => {
     amb.style.opacity = 0;
     setTimeout(() => {
-      cols.forEach((c, i) => amb.children[i].style.setProperty('--c', c));
-      amb.style.setProperty('--base', cols[0].replace('rgb', 'rgba').replace(')', ',1)'));
+      [...amb.children].forEach(i => { i.style.backgroundImage = pic ? `url(${pic})` : 'none'; });
+      amb.style.setProperty('--base', base);
       amb.style.opacity = 1;
     }, 350);
   };
-  if (!url) { set(['rgb(40,40,44)', 'rgb(34,34,38)', 'rgb(44,44,48)', 'rgb(30,30,34)']); return; }
+  if (!url) { set('', '#1e1e1e'); return; }
   const img = new Image();
   img.onload = () => {
     try {
-      const c = document.createElement('canvas'); c.width = c.height = 16;
-      const g = c.getContext('2d', {willReadFrequently: true}); g.drawImage(img, 0, 0, 16, 16);
-      const d = g.getImageData(0, 0, 16, 16).data, cols = [];
-      for (const [x0, y0] of [[0, 0], [8, 0], [0, 8], [8, 8]]) {
-        let r = 0, gg = 0, b = 0, n = 0;
-        for (let y = y0; y < y0 + 8; y++) for (let x = x0; x < x0 + 8; x++) { const i = (y * 16 + x) * 4; r += d[i]; gg += d[i + 1]; b += d[i + 2]; n++; }
-        r /= n; gg /= n; b /= n;
-        const m = (r + gg + b) / 3, s = 1.25;                   // a little more colour, then darker
-        const f = v => Math.max(0, Math.min(255, Math.round((m + (v - m) * s) * 0.55)));
-        cols.push(`rgb(${f(r)},${f(gg)},${f(b)})`);
-      }
-      set(cols);
-    } catch (e) { /* cover not readable: keep the old colours */ }
+      // shrink the cover to 24x24 and stretch it back: the browser smooths it into soft colour fields (cheap blur), a bit more colourful
+      const c = document.createElement('canvas'); c.width = c.height = 24;
+      const g = c.getContext('2d', {willReadFrequently: true}); g.filter = 'saturate(1.5) brightness(1.05)'; g.drawImage(img, 0, 0, 24, 24);
+      const d = g.getImageData(0, 0, 24, 24).data; let r = 0, gg = 0, b = 0;
+      for (let i = 0; i < d.length; i += 4) { r += d[i]; gg += d[i + 1]; b += d[i + 2]; }
+      const n = d.length / 4;
+      set(c.toDataURL('image/png'), `rgb(${Math.round(r / n * .5)},${Math.round(gg / n * .5)},${Math.round(b / n * .5)})`);
+    } catch (e) { /* cover not readable: keep the old background */ }
   };
   img.src = url;
 }
