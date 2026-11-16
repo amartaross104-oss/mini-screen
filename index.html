@@ -15,6 +15,7 @@
 html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'VT323',ui-monospace,monospace;font-size:20px;overflow:hidden}
 #app{height:100%;display:flex;flex-direction:column;padding:8px;gap:8px}
 #screens{flex:1;min-height:0;position:relative}
+#app.nobar #tabs{display:none}
 .screen{position:absolute;inset:0;display:none;gap:8px}
 .screen.on{display:grid}
 .panel{position:relative;border:3px solid var(--c,var(--cyan));padding:14px 10px 8px;min-height:0;overflow:hidden}
@@ -64,6 +65,55 @@ button:active,button.hold{background:var(--c,var(--fg));color:#000}
 #ly-off{position:absolute;right:104px;top:3px;display:flex;align-items:center;gap:6px;font:700 11px 'Silkscreen',monospace;color:var(--dim)}
 #ly-off button{padding:0 10px;font-size:14px;line-height:1.1;border-width:2px;--c:var(--dim);touch-action:none}
 #ly-v{cursor:pointer;min-width:64px;text-align:center}
+#ly-hide{position:absolute;left:76px;top:2px;padding:0 8px;font-size:11px;line-height:1.5;border-width:2px;--c:var(--dim)}
+/* lyrics hidden: the lyrics panel shrinks to a thin bar and the visualizer takes the freed space */
+#s-music.nolyr{grid-template-rows:26px 1fr}
+#s-music.nolyr #ly-wrap,#s-music.nolyr #ly-off,#s-music.nolyr #ly-st{display:none}
+#st-btn{position:absolute;left:76px;top:2px;padding:0 8px;font-size:11px;line-height:1.5;border-width:2px;--c:var(--dim);z-index:2}
+#m-prog,#ly-tog{display:none}
+/* CLEAN style: big rounded cover, title/artist, thin progress bar with times, simple icon controls (the lyrics icon shows/hides lyrics) */
+#amb{display:none;position:absolute;inset:0;overflow:hidden;border-radius:12px;pointer-events:none;background:var(--base,#1e1e1e);transition:opacity .35s}
+#s-music.clean #amb{display:block}
+#amb i{position:absolute;width:75%;height:150%;border-radius:50%;background:radial-gradient(closest-side,var(--c,#333),transparent);opacity:.95;will-change:transform}
+#amb i:nth-child(1){left:-20%;top:-40%;animation:amb1 19s ease-in-out infinite alternate}
+#amb i:nth-child(2){right:-20%;top:-45%;animation:amb2 23s ease-in-out infinite alternate}
+#amb i:nth-child(3){left:-15%;bottom:-60%;animation:amb3 27s ease-in-out infinite alternate}
+#amb i:nth-child(4){right:-15%;bottom:-55%;animation:amb4 21s ease-in-out infinite alternate}
+@keyframes amb1{to{transform:translate(45%,30%) scale(1.15)}}
+@keyframes amb2{to{transform:translate(-40%,40%) scale(.9)}}
+@keyframes amb3{to{transform:translate(40%,-35%) scale(1.1)}}
+@keyframes amb4{to{transform:translate(-45%,-30%) scale(1.2)}}
+#s-music.clean{grid-template-columns:42% 1fr;grid-template-rows:1fr;background:#1e1e1e;border-radius:12px;font-family:system-ui,'Segoe UI',Roboto,sans-serif}
+#s-music.clean.nolyr{grid-template-columns:1fr}
+#s-music.clean .panel{border:0;background:transparent}
+#s-music.clean .tag,#s-music.clean #ly-hide,#s-music.clean #viz{display:none}
+#s-music.clean #m-card{grid-column:1;grid-row:1;padding:10px 14px 6px;gap:5px}
+#s-music.clean #lyrics{grid-column:2;grid-row:1}
+#s-music.clean.nolyr #lyrics{display:none}
+#s-music.clean #art{flex:1;min-height:0;width:auto;max-width:none;height:auto;aspect-ratio:1;border:0;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.55)}
+#s-music.clean #m-title{font:600 21px/1.15 system-ui,'Segoe UI',Roboto,sans-serif;margin-top:4px}
+#s-music.clean #m-artist{font:400 16px/1.1 system-ui,'Segoe UI',Roboto,sans-serif;color:#9a9a9a}
+#s-music.clean #m-bar,#s-music.clean #m-time{display:none}
+#s-music.clean #m-prog{display:flex;align-items:center;gap:10px;width:100%;max-width:520px;font:400 13px system-ui,'Segoe UI',Roboto,sans-serif;color:#9a9a9a}
+#m-pb{flex:1;height:5px;border-radius:3px;background:#444;overflow:hidden}
+#m-pb i{display:block;height:100%;width:0;background:#e8e8e8;border-radius:3px}
+#m-t1,#m-t2{min-width:38px}#m-t2{text-align:right}
+#s-music.clean #m-ctl{margin-top:0;gap:26px;align-items:center;width:100%;max-width:520px;justify-content:center;position:relative}
+#s-music.clean #m-ctl button{width:44px;height:36px;border:0;background:no-repeat center/26px;font-size:0;color:transparent}
+#s-music.clean #m-ctl button:active{opacity:.5;background-color:transparent}
+#s-music.clean #m-ctl [data-m=prev]{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e8e8e8'%3E%3Cpath d='M11 6v12L2 12zM22 6v12l-9-6z'/%3E%3C/svg%3E")}
+#s-music.clean #m-ctl [data-m=next]{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e8e8e8'%3E%3Cpath d='M13 6v12l9-6zM2 6v12l9-6z'/%3E%3C/svg%3E")}
+#s-music.clean #m-play{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e8e8e8'%3E%3Cpath d='M7 4v16l13-8z'/%3E%3C/svg%3E");background-size:30px}
+#s-music.clean #m-play.pl{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e8e8e8'%3E%3Cpath d='M6 4h4v16H6zM14 4h4v16h-4z'/%3E%3C/svg%3E")}
+#s-music.clean #ly-tog{display:block;position:absolute;right:0;top:50%;transform:translateY(-50%);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d0d0d0' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M4 4h16v12H9l-5 4z'/%3E%3C/svg%3E");background-size:22px;opacity:.7}
+#s-music.clean #ly-tog.on{opacity:1}
+#s-music.clean #ly-tog.on{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e8e8e8' stroke='%23e8e8e8' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M4 4h16v12H9l-5 4z'/%3E%3C/svg%3E")}
+#s-music.clean #m-vol{width:100%;max-width:520px;gap:6px}
+#s-music.clean #m-vol button{border:0;color:#9a9a9a;background:none;font:600 15px system-ui,sans-serif;height:24px;min-width:28px}
+#s-music.clean #vol-b{height:5px;border-radius:3px;background:#444;overflow:hidden;align-self:center}
+#s-music.clean #vol-b i{background:#e8e8e8}
+#s-music.clean #vol-n{font:400 13px system-ui,sans-serif;color:#9a9a9a;min-width:40px}
+#s-music.clean #ly-off{right:12px}
 #viz{grid-column:2;grid-row:2;padding:0}
 #viz canvas{width:100%;height:100%;display:block}
 
@@ -194,16 +244,19 @@ button:active,button.hold{background:var(--c,var(--fg));color:#000}
 <div id="saver"><div id="saver-t">--:--</div></div>
 <div id="conn"></div>
 <div id="toast"></div>
-<div id="app">
+<div id="app" class="nobar">
   <div id="screens">
     <section class="screen" id="s-music">
+      <div id="amb"><i></i><i></i><i></i><i></i></div>
       <div class="panel" id="m-card"><span class="tag">MUSIC</span><span class="tag r" id="m-app">-</span>
         <div id="art"></div><div id="m-title">Tiada lagu</div><div id="m-artist">-</div>
+        <button id="st-btn">CLEAN</button>
         <div id="m-bar"></div><div id="m-time">0:00 / 0:00</div>
+        <div id="m-prog"><span id="m-t1">0:00</span><div id="m-pb"><i></i></div><span id="m-t2">-0:00</span></div>
         <div id="m-vol"><button data-v="-5">-</button><div id="vol-b"><i></i></div><button data-v="5">+</button><span id="vol-n">-</span><button data-v="mute">MUTE</button></div>
-        <div id="m-ctl"><button data-m="prev">|&lt;</button><button id="m-play" data-m="playpause">||</button><button data-m="next">&gt;|</button></div>
+        <div id="m-ctl"><button data-m="prev">|&lt;</button><button id="m-play" data-m="playpause">||</button><button data-m="next">&gt;|</button><button id="ly-tog" title="Lirik"></button></div>
       </div>
-      <div class="panel pk" id="lyrics"><span class="tag">LYRICS</span><span class="tag r" id="ly-st"></span><div id="ly-wrap"><div id="ly-list"></div></div><span id="ly-off"><button id="ly-m">-</button><span id="ly-v"></span><button id="ly-p">+</button></span></div>
+      <div class="panel pk" id="lyrics"><span class="tag">LYRICS</span><span class="tag r" id="ly-st"></span><button id="ly-hide">HIDE</button><div id="ly-wrap"><div id="ly-list"></div></div><span id="ly-off"><button id="ly-m">-</button><span id="ly-v"></span><button id="ly-p">+</button></span></div>
       <div class="panel cy" id="viz"><canvas></canvas></div>
     </section>
 
@@ -275,6 +328,31 @@ document.addEventListener('touchend', e => {
   go(order[Math.max(0, Math.min(order.length - 1, cur + (dx < 0 ? 1 : -1)))]);
 });
 
+// ---- bottom bar: hidden by default so it does not get in the way. Double-tap the screen to show it; it hides itself
+// again after a few seconds without a touch (double-tap again to hide it at once). Swiping left/right still changes tab.
+let barT = null;
+function showBar(on) {
+  clearTimeout(barT);
+  $('#app').classList.toggle('nobar', !on);
+  if (on) barT = setTimeout(() => showBar(false), 8000);
+  if (typeof layoutSoon === 'function') layoutSoon();
+}
+let lastTap = {t: 0, x: 0, y: 0}, downAt = null;
+document.addEventListener('pointerdown', e => {
+  downAt = {x: e.clientX, y: e.clientY};
+  if (!$('#app').classList.contains('nobar') && e.target.closest('#tabs')) showBar(true);     // keep it open while it is being used
+}, true);
+document.addEventListener('pointerup', e => {
+  if (!downAt) return;
+  const moved = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y); downAt = null;
+  if (moved > 25 || e.target.closest('button, input, textarea, #vol-b, #q-list, #cr-area, #cr-bar, #tabs, #loc-modal, #modal')) return;
+  const now = performance.now();
+  if (now - lastTap.t < 380 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 60) {
+    lastTap.t = 0; showBar($('#app').classList.contains('nobar'));
+  } else lastTap = {t: now, x: e.clientX, y: e.clientY};
+}, true);
+document.addEventListener('click', e => { if (e.target.closest('#tabs button') && !$('#app').classList.contains('nobar')) showBar(true); });
+
 // ---- layout: always look landscape, even if the phone is stuck in portrait (e.g. after the screen turned off)
 let rotMode = null;   // null = real landscape, 'cw' / 'ccw' = portrait phone, page rotated
 function layoutStage() {
@@ -293,6 +371,7 @@ function layoutStage() {
 // Debounced: while Android is rotating the screen the size changes several times; wait until it settles (less twitchy).
 let layT = null; const layoutSoon = () => { clearTimeout(layT); layT = setTimeout(layoutStage, 300); };
 addEventListener('resize', layoutSoon);
+setTimeout(() => toast('Ketuk 2x pada skrin untuk menu'), 1200);
 if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', layoutSoon);
 document.addEventListener('fullscreenchange', layoutSoon);
 $('#flip').onclick = () => { try { localStorage.setItem('rot', rotMode === 'cw' ? 'ccw' : 'cw'); } catch (e) {} layoutStage(); };
@@ -426,9 +505,15 @@ function onMedia() {
   $('#m-artist').textContent = m ? (m.artist || '-') : '-';
   $('#m-app').textContent = m ? (m.app || '').replace(/\.exe$/i, '').split(/[!.]/)[0].slice(0, 14).toUpperCase() : '-';
   $('#m-play').textContent = m && m.playing ? '||' : '▶';
+  $('#m-play').classList.toggle('pl', !!(m && m.playing));
   // art_v goes up when the server replaces a stale thumbnail with the real one, so the phone fetches it again.
   const k = m && m.has_art ? m.key + '#' + (m.art_v || 0) : '';
-  if (k !== curArt) { curArt = k; $('#art').style.backgroundImage = k ? `url('/art?t=${encodeURIComponent(TOKEN)}&k=${encodeURIComponent(m.key)}&v=${m.art_v || 0}')` : 'none'; }
+  if (k !== curArt) {
+    curArt = k;
+    const u = k ? `/art?t=${encodeURIComponent(TOKEN)}&k=${encodeURIComponent(m.key)}&v=${m.art_v || 0}` : '';
+    $('#art').style.backgroundImage = k ? `url('${u}')` : 'none';
+    ambFrom(u);
+  }
   // the "now playing" strip on the Queue tab (the queue list itself only holds upcoming songs)
   $('#q-art').style.backgroundImage = $('#art').style.backgroundImage;
   $('#q-t').textContent = m ? (m.title || 'Tiada tajuk') : 'Tiada lagu dimainkan';
@@ -565,6 +650,8 @@ function tickMedia() {
   $('#m-time').textContent = fmt(p) + ' / ' + fmt(d);
   const n = 22, f = d ? Math.round(p / d * n) : 0;
   $('#m-bar').textContent = '■'.repeat(f) + '□'.repeat(n - f);
+  $('#m-t1').textContent = fmt(p); $('#m-t2').textContent = '-' + fmt(Math.max(0, d - p));
+  $('#m-pb i').style.width = (d ? Math.min(100, p / d * 100) : 0) + '%';
   if ($('#s-queue').classList.contains('on')) {                         // only while the Queue tab is showing
     $('#q-time').textContent = fmt(p);
     $('#q-bar i').style.width = d ? Math.min(100, p / d * 100) + '%' : '0';
@@ -583,6 +670,57 @@ document.querySelectorAll('[data-m]').forEach(b => b.onclick = async () => {
 
 // ---- visualizer
 const cv = $('#viz canvas'), cx = cv.getContext('2d');
+// Hide / show the lyrics (remembered on this phone); the visualizer grows into the freed space.
+let lyHidden = false; try { lyHidden = localStorage.getItem('lyhide') === '1'; } catch (e) {}
+function applyLyHide() {
+  $('#s-music').classList.toggle('nolyr', lyHidden);
+  $('#ly-hide').textContent = lyHidden ? 'SHOW' : 'HIDE';
+  $('#ly-tog').classList.toggle('on', !lyHidden);
+  setTimeout(() => { sizeCanvas(); if (!lyHidden) { setLyFont(); lyScroll(lyIdx); } }, 30);
+}
+$('#ly-hide').onclick = () => { lyHidden = !lyHidden; try { localStorage.setItem('lyhide', lyHidden ? '1' : '0'); } catch (e) {} applyLyHide(); };
+$('#ly-tog').onclick = $('#ly-hide').onclick;
+// Moving background for the CLEAN style: four soft colour blobs taken from the cover (one per quarter of the picture), drifting slowly.
+// Every song gets its own colours. Colours are darkened so the white text stays readable.
+function ambFrom(url) {
+  const amb = $('#amb');
+  const set = cols => {
+    amb.style.opacity = 0;
+    setTimeout(() => {
+      cols.forEach((c, i) => amb.children[i].style.setProperty('--c', c));
+      amb.style.setProperty('--base', cols[0].replace('rgb', 'rgba').replace(')', ',1)'));
+      amb.style.opacity = 1;
+    }, 350);
+  };
+  if (!url) { set(['rgb(40,40,44)', 'rgb(34,34,38)', 'rgb(44,44,48)', 'rgb(30,30,34)']); return; }
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const c = document.createElement('canvas'); c.width = c.height = 16;
+      const g = c.getContext('2d', {willReadFrequently: true}); g.drawImage(img, 0, 0, 16, 16);
+      const d = g.getImageData(0, 0, 16, 16).data, cols = [];
+      for (const [x0, y0] of [[0, 0], [8, 0], [0, 8], [8, 8]]) {
+        let r = 0, gg = 0, b = 0, n = 0;
+        for (let y = y0; y < y0 + 8; y++) for (let x = x0; x < x0 + 8; x++) { const i = (y * 16 + x) * 4; r += d[i]; gg += d[i + 1]; b += d[i + 2]; n++; }
+        r /= n; gg /= n; b /= n;
+        const m = (r + gg + b) / 3, s = 1.25;                   // a little more colour, then darker
+        const f = v => Math.max(0, Math.min(255, Math.round((m + (v - m) * s) * 0.55)));
+        cols.push(`rgb(${f(r)},${f(gg)},${f(b)})`);
+      }
+      set(cols);
+    } catch (e) { /* cover not readable: keep the old colours */ }
+  };
+  img.src = url;
+}
+// Music screen style: CLASSIC (pixel look with visualizer) or CLEAN (cover + simple controls); remembered on this phone.
+let cleanUI = false; try { cleanUI = localStorage.getItem('clean') === '1'; } catch (e) {}
+function applyStyle() {
+  $('#s-music').classList.toggle('clean', cleanUI);
+  $('#st-btn').textContent = cleanUI ? 'CLASSIC' : 'CLEAN';
+  applyLyHide();
+}
+$('#st-btn').onclick = () => { cleanUI = !cleanUI; try { localStorage.setItem('clean', cleanUI ? '1' : '0'); } catch (e) {} applyStyle(); };
+applyStyle();
 function sizeCanvas() { const d = devicePixelRatio || 1; cv.width = cv.clientWidth * d; cv.height = cv.clientHeight * d; }  // client size ignores the page rotation
 addEventListener('resize', sizeCanvas);
 const peaks = new Array(32).fill(0);
