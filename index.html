@@ -277,10 +277,12 @@ button:active,button.hold{background:var(--c,var(--fg));color:#000}
 
     <section class="screen" id="s-home">
       <div class="panel pk" id="clock"><span class="tag">CLOCK</span><div id="clock-t">--:--</div><div id="clock-d">-</div><div id="clock-loc"></div><div id="pray-next"></div></div>
-      <div class="panel gr" id="stats"><span class="tag">PC STATS</span>
+      <div class="panel gr" id="stats"><span class="tag">PC STATS</span><span class="tag r" id="st-pmode"></span>
         <div class="stat" style="--c:var(--cyan)"><div class="l">CPU</div><div class="v" id="st-cpu">-</div><div class="b"><i id="b-cpu"></i></div></div>
         <div class="stat" style="--c:var(--pink)"><div class="l">RAM</div><div class="v" id="st-ram">-</div><div class="b"><i id="b-ram"></i></div></div>
         <div class="stat" style="--c:var(--green)"><div class="l">TEMP</div><div class="v" id="st-temp">-</div><div class="b"><i id="b-temp"></i></div></div>
+        <div class="stat" id="t-clk" style="--c:var(--cyan)"><div class="l">CPU CLOCK</div><div class="v" id="st-clk">-</div><div class="b"><i id="b-clk"></i></div></div>
+        <div class="stat" id="t-cool" style="--c:var(--green)"><div class="l">COOLING</div><div class="v" id="st-cool">-</div><div class="b"><i id="b-cool"></i></div></div>
         <div class="stat" id="t-gpu" style="--c:var(--yellow)"><div class="l">GPU</div><div class="v" id="st-gpu">-</div><div class="b"><i id="b-gpu"></i></div></div>
         <div class="stat" style="--c:var(--orange)"><div class="l">DISK C:</div><div class="v" id="st-disk">-</div><div class="b"><i id="b-disk"></i></div></div>
         <div class="stat" style="--c:var(--green)"><div class="l">NET ↓</div><div class="v" id="st-down">-</div></div>
@@ -750,6 +752,16 @@ function onStats(s) {
   set('cpu', s.cpu, '%'); set('ram', s.ram, '%'); set('disk', s.disk, '%'); set('temp', s.temp, '°C');
   $('#b-temp').style.width = Math.min(100, s.temp || 0) + '%';
   $('#b-temp').style.background = s.temp >= 75 ? 'var(--red)' : s.temp >= 60 ? 'var(--yellow)' : 'var(--green)';
+  // CPU clock, and "cooling": there is no fan RPM on this laptop, so show whether Windows is slowing the CPU down to cool it
+  $('#t-clk').style.display = s.mhz == null ? 'none' : '';
+  $('#st-clk').textContent = s.mhz == null ? '' : (s.mhz / 1000).toFixed(1) + ' GHz';
+  $('#b-clk').style.width = (s.fpct == null ? 0 : Math.min(100, s.fpct)) + '%';
+  $('#t-cool').style.display = s.limit == null && s.thr == null ? 'none' : '';
+  const hot = s.thr === true || (s.limit != null && s.limit < 100);
+  $('#st-cool').textContent = hot ? (s.limit != null && s.limit < 100 ? 'SLOWED ' + (100 - s.limit) + '%' : 'THROTTLED') : 'OK';
+  $('#t-cool').style.setProperty('--c', hot ? 'var(--red)' : 'var(--green)');
+  $('#b-cool').style.width = (s.limit == null ? 100 : Math.max(0, Math.min(100, s.limit))) + '%';
+  $('#st-pmode').textContent = s.pmode || '';
   $('#t-gpu').style.display = s.gpu == null ? 'none' : '';  // hide GPU tile when no data (this PC has no NVIDIA GPU)
   set('gpu', s.gpu, s.gpu_temp ? '% ' + s.gpu_temp + '°' : '%');
   $('#st-down').textContent = speed(s.down); $('#st-up').textContent = speed(s.up);

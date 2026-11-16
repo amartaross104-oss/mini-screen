@@ -565,34 +565,87 @@ def gpu_stats():
         return {}
 
 
-TEMPS = {"c": None}
+TEMPS = {"c": None, "mhz": None, "fpct": None, "limit": None, "thr": None}
+
+# Windows "power mode" slider (an overlay scheme); the GUIDs are fixed by Windows.
+POWER_MODES = {
+    "00000000-0000-0000-0000-000000000000": "BALANCED",
+    "961cc777-2547-4f9d-8174-7d86181b8a7a": "BEST EFFICIENCY",
+    "3af9b8d9-7c97-431d-ad78-34a8bfea439f": "BETTER PERF",
+    "ded574b5-45a0-4f42-8737-46345c09c238": "BEST PERF",
+}
+
+
+def power_mode():
+    """Name of the active Windows power mode (read from the registry, no admin needed)."""
+    try:
+        import winreg
+        plugged = psutil.sensors_battery()
+        ac = plugged is None or plugged.power_plugged is not False
+        name = "ActiveOverlayAcPowerScheme" if ac else "ActiveOverlayDcPowerScheme"
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes") as k:
+            guid = str(winreg.QueryValueEx(k, name)[0]).lower()
+        return POWER_MODES.get(guid)
+    except Exception:
+        return None
 
 
 def temp_thread():
-    """Read Windows thermal zones via typeperf (no admin needed; values are Kelvin).
+    """Read Windows thermal / CPU counters via typeperf (no admin needed).
 
-    Reports the hottest zone, which is the closest thing to "SoC temperature"
-    that Windows exposes on this machine.
+    - temperature: the hottest thermal zone (Kelvin), the closest thing to "SoC temperature" Windows exposes here
+    - limit: the lowest "% Passive Limit" of any zone (100 = Windows is not slowing the CPU down to cool it)
+    - thr: true when any zone reports throttle reasons
+    - mhz / fpct: current CPU clock and its percentage of the maximum
+    Laptop fan RPM is not exposed by this laptop's firmware, so cooling is shown through throttling instead.
     """
     # One short-lived sample per loop (no long-running child that could be orphaned).
-    cmd = ["typeperf", r"\Thermal Zone Information(*)\Temperature", "-sc", "1"]
+    cmd = ["typeperf",
+           r"\Thermal Zone Information(*)\Temperature",
+           r"\Thermal Zone Information(*)\% Passive Limit",
+           r"\Thermal Zone Information(*)\Throttle Reasons",
+           r"\Processor Information(_Total)\Processor Frequency",
+           r"\Processor Information(_Total)\% of Maximum Frequency",
+           "-sc", "1"]
     while True:
-        value = None
+        res = {"c": None, "mhz": None, "fpct": None, "limit": None, "thr": None}
         try:
             out = subprocess.run(cmd, capture_output=True, text=True, timeout=10,
                                  creationflags=0x08000000).stdout
+            header = None
             for line in out.splitlines():
                 parts = line.strip().strip('"').split('","')
-                try:
-                    vals = [float(x) for x in parts[1:]]
-                except ValueError:
-                    continue  # header or status line
-                vals = [v for v in vals if v > 200]  # drop unused zones reporting 0
-                if vals:
-                    value = round(max(vals) - 273.15)
+                if parts and parts[0].startswith("(PDH-CSV"):
+                    header = [p.lower() for p in parts]
+                    continue
+                if header is None or len(parts) != len(header):
+                    continue  # blank or status line
+                temps, limits, reasons = [], [], []
+                for name, raw in zip(header[1:], parts[1:]):
+                    try:
+                        v = float(raw)
+                    except ValueError:
+                        continue
+                    if name.endswith("\\temperature"):
+                        if v > 200:  # drop unused zones reporting 0
+                            temps.append(v)
+                    elif name.endswith("\\% passive limit"):
+                        limits.append(v)
+                    elif name.endswith("\\throttle reasons"):
+                        reasons.append(v)
+                    elif name.endswith("\\processor frequency"):
+                        res["mhz"] = round(v)
+                    elif name.endswith("\\% of maximum frequency"):
+                        res["fpct"] = round(v)
+                if temps:
+                    res["c"] = round(max(temps) - 273.15)
+                if limits:
+                    res["limit"] = round(min(limits))
+                if reasons:
+                    res["thr"] = any(r > 0 for r in reasons)
         except Exception as e:
             print(f"[temp] {e!r}", file=sys.stderr)
-        TEMPS["c"] = value
+        TEMPS.update(res)
         time.sleep(3)
 
 
@@ -617,7 +670,11 @@ async def poller():
         _last_net = (now, net)
         st = {"cpu": round(psutil.cpu_percent(None)), "ram": round(psutil.virtual_memory().percent),
               "disk": round(psutil.disk_usage("C:\\").percent), "down": down, "up": up,
-              "temp": TEMPS["c"]}
+              "temp": TEMPS["c"], "mhz": TEMPS["mhz"], "fpct": TEMPS["fpct"],
+              "limit": TEMPS["limit"], "thr": TEMPS["thr"], "pmode": STATE.get("pmode")}
+        if tick % 10 == 0:
+            STATE["pmode"] = power_mode()
+            st["pmode"] = STATE["pmode"]
         if tick % 3 == 0:
             st.update(await loop.run_in_executor(None, gpu_stats))
         else:
