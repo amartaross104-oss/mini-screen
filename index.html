@@ -75,7 +75,8 @@ button:active,button.hold{background:var(--c,var(--fg));color:#000}
 #amb{display:none;position:absolute;inset:0;overflow:hidden;border-radius:12px;pointer-events:none;background:var(--base,#1e1e1e);transition:opacity .35s}
 #s-music.clean #amb{display:block}
 /* Apple-Music-like motion: three big, soft (pre-blurred) copies of the cover that spin and breathe at different speeds, so colours swirl and mix */
-#amb i{position:absolute;left:50%;top:50%;width:150%;aspect-ratio:1;translate:-50% -50%;background:center/100% 100%;will-change:rotate,scale}
+#amb i{position:absolute;left:50%;top:50%;width:130%;aspect-ratio:1;translate:-50% -50%;background:center/100% 100%;will-change:rotate,scale;
+  -webkit-mask-image:radial-gradient(closest-side,#000 35%,transparent 100%);mask-image:radial-gradient(closest-side,#000 35%,transparent 100%)}   /* soft round edges: no visible squares */
 #amb i:nth-child(1){animation:ambR 38s linear infinite,ambS 11s ease-in-out infinite alternate}
 #amb i:nth-child(2){left:22%;top:85%;opacity:.7;animation:ambR 52s linear infinite reverse,ambS 14s ease-in-out infinite alternate-reverse}
 #amb i:nth-child(3){left:80%;top:10%;opacity:.65;animation:ambR 31s linear infinite,ambS 9s ease-in-out infinite alternate}
@@ -700,7 +701,11 @@ function ambFrom(url) {
       const d = g.getImageData(0, 0, 24, 24).data; let r = 0, gg = 0, b = 0;
       for (let i = 0; i < d.length; i += 4) { r += d[i]; gg += d[i + 1]; b += d[i + 2]; }
       const n = d.length / 4;
-      set(c.toDataURL('image/png'), `rgb(${Math.round(r / n * .5)},${Math.round(gg / n * .5)},${Math.round(b / n * .5)})`);
+      // stretch to 128x128 and blur once here (a one-off cost), so the layers are smooth, not blocky
+      const c2 = document.createElement('canvas'); c2.width = c2.height = 128;
+      const g2 = c2.getContext('2d'); g2.imageSmoothingQuality = 'high'; g2.filter = 'blur(10px)';
+      g2.drawImage(c, -12, -12, 152, 152);
+      set(c2.toDataURL('image/png'),`rgb(${Math.round(r / n * .5)},${Math.round(gg / n * .5)},${Math.round(b / n * .5)})`);
     } catch (e) { /* cover not readable: keep the old background */ }
   };
   img.src = url;
