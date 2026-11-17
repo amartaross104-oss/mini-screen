@@ -89,7 +89,7 @@ The page contacts these from the phone, and the server contacts LRCLIB. Only the
 | [Aladhan](https://aladhan.com) | Prayer times | Latitude and longitude |
 | [BigDataCloud](https://www.bigdatacloud.com) | Place name from coordinates | Latitude and longitude |
 | [Open-Meteo Geocoding](https://open-meteo.com) | City search | The text you type |
-| [iTunes Search API](https://performance-partners.apple.com/search-api) | Album pictures in the Queue list | Song title and artist (the server asks; the phone then loads the pictures from Apple's image servers) |
+| [iTunes Search API](https://performance-partners.apple.com/search-api) | Album pictures in the Queue list | Song title and artist (the server asks; the phone then loads the pictures from Apple's image servers). Also used for the main cover: players like YouTube Music give Windows only a tiny thumbnail (about 120 px), so when the cover is small the server looks the song up and uses a large one (title and artist must match; otherwise the small one stays) |
 | Google Fonts | Pixel fonts (Silkscreen, VT323) | Standard font request |
 
 ## Up next: YouTube Music (in Edge)

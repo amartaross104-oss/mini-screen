@@ -278,10 +278,52 @@ async def read_media():
                     ART_META.pop(old, None)
             except Exception as e:
                 print(f"[art] {e!r}", file=sys.stderr)
+    meta = ART_META.get(key)
+    if meta and key in ART_CACHE and not meta.get("hd_tried") and time.time() - meta["first"] >= ART_SETTLE_S:
+        meta["hd_tried"] = True          # once per song, after the real thumbnail has settled
+        asyncio.get_running_loop().create_task(upgrade_art(key, props.title or "", artist))
     return {"title": props.title, "artist": artist, "album": album,
             "playing": playing, "position": pos, "duration": duration, "key": key,
             "has_art": key in ART_CACHE, "art_v": ART_META.get(key, {}).get("v", 0),
             "app": ses.source_app_user_model_id}
+
+
+HD_MIN_PX = 600     # a cover at least this wide is left alone
+
+
+def _img_width(data):
+    import io
+    from PIL import Image
+    with Image.open(io.BytesIO(data)) as im:
+        return im.size[0]
+
+
+def hd_art_bytes(title, artist):
+    """A large cover (up to 1200 px) for the song from the iTunes Search API, or None if there is no matching song."""
+    url = itunes_art(title, artist)
+    if not url:
+        return None
+    url = re.sub(r"/\d+x\d+bb", "/1200x1200bb", url)       # the same picture, bigger
+    req = urllib.request.Request(url, headers={"User-Agent": "MiniScreen/1.0"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return r.read()
+
+
+async def upgrade_art(key, title, artist):
+    """Players such as YouTube Music hand Windows a small thumbnail (a few hundred px), which looks pixelated when
+    enlarged. If the cover is small, look the song up (title + artist must match) and use a large version instead.
+    The phone fetches it again because art_v goes up."""
+    loop = asyncio.get_running_loop()
+    try:
+        cur = await loop.run_in_executor(None, _img_width, ART_CACHE[key])
+        if cur >= HD_MIN_PX:
+            return
+        hd = await loop.run_in_executor(None, hd_art_bytes, title, artist)
+        if hd and key in ART_CACHE and await loop.run_in_executor(None, _img_width, hd) > cur:
+            ART_CACHE[key] = hd
+            ART_META[key]["v"] += 1
+    except Exception as e:
+        print(f"[art-hd] {e!r}", file=sys.stderr)
 
 
 async def media_cmd(cmd):
@@ -373,23 +415,27 @@ def itunes_art(title, artist):
     accepts a result whose title and artist match, never "the closest thing"."""
     clean = re.sub(r"\s*[\(\[][^)\]]*[\)\]]", "", title).strip()
     want_t = _norm(clean)
-    want_a = _norm(re.split(r",|&| feat\.? | x ", artist, flags=re.I)[0])
+    first = re.split(r",|&| feat\.? | x | and | dan ", artist, flags=re.I)[0].strip()
+    want_a = _norm(first)
+    # "Title Artist", then "Title First-artist" (a long "A and B" credit often finds nothing as a whole)
+    terms = [f"{clean} {artist}"] + ([f"{clean} {first}"] if first and first != artist else [])
     for country in ("MY", None):                        # the Malaysian storefront first, then the default one
-        params = {"term": f"{clean} {artist}", "entity": "song", "limit": 8}
-        if country:
-            params["country"] = country
-        req = urllib.request.Request("https://itunes.apple.com/search?" + urllib.parse.urlencode(params),
-                                     headers={"User-Agent": "MiniScreen/1.0"})
-        try:
-            with urllib.request.urlopen(req, timeout=8) as r:
-                results = json.loads(r.read().decode("utf-8")).get("results", [])
-        except Exception:
-            continue
-        for r in results:
-            t, a = _norm(r.get("trackName")), _norm(r.get("artistName"))
-            if (t == want_t or (min(len(t), len(want_t)) >= 4 and (t in want_t or want_t in t))) \
-                    and (not want_a or want_a in a or a in want_a):
-                return r.get("artworkUrl100") or ""
+        for term in terms:
+            params = {"term": term, "entity": "song", "limit": 8}
+            if country:
+                params["country"] = country
+            req = urllib.request.Request("https://itunes.apple.com/search?" + urllib.parse.urlencode(params),
+                                         headers={"User-Agent": "MiniScreen/1.0"})
+            try:
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    results = json.loads(r.read().decode("utf-8")).get("results", [])
+            except Exception:
+                continue
+            for r in results:
+                t, a = _norm(r.get("trackName")), _norm(r.get("artistName"))
+                if (t == want_t or (min(len(t), len(want_t)) >= 4 and (t in want_t or want_t in t))) \
+                        and (not want_a or want_a in a or a in want_a):
+                    return r.get("artworkUrl100") or ""
     return ""
 
 
